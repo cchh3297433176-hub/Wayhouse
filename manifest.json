@@ -1,0 +1,11 @@
+{
+  "display_name": "伴窝",
+  "loading_order": 50,
+  "js": "index.js",
+  "css": "style.css",
+  "author": "cchh3297433176-hub",
+  "version": "0.0.1",
+  "homePage": "",
+  "auto_update": false,
+  "minimum_client_version": "1.12.0"
+}
