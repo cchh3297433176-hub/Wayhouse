@@ -1,0 +1,120 @@
+#wayhouse-panel {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90vw, 360px);
+  max-height: 70vh;
+  background: #fdf6ee;
+  border: 1px solid #d8c3a5;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  z-index: 999999;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+#wayhouse-panel .wayhouse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #8a6d5c;
+  color: #fff;
+  font-weight: 700;
+}
+
+#wayhouse-panel .wayhouse-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#wayhouse-panel .wayhouse-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.wayhouse-settings-block {
+  border-top: 1px dashed #d8c3a5;
+  padding-top: 12px;
+  margin-top: 6px;
+}
+
+.wayhouse-settings-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #6b5443;
+}
+
+.wayhouse-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 13px;
+}
+
+.wayhouse-row select,
+.wayhouse-row input[type='range'] {
+  max-width: 140px;
+}
+
+.wayhouse-upload-btn {
+  background: #8a6d5c;
+  color: #fff;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.wayhouse-clear-btn {
+  background: none;
+  border: 1px solid #c98b7a;
+  color: #c05a45;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 悬浮球 */
+#wayhouse-float-ball {
+  position: fixed;
+  z-index: 999998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #8a6d5c;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  cursor: grab;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+#wayhouse-float-ball.dragging {
+  cursor: grabbing;
+  opacity: 0.85;
+}
+
+#wayhouse-float-ball img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+#wayhouse-float-ball .wayhouse-float-fallback {
+  font-size: 60%;
+  color: #fff;
+  pointer-events: none;
+}
