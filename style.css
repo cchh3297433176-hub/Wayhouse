@@ -38,9 +38,129 @@
 #wayhouse-panel .wayhouse-body {
   padding: 16px;
   overflow-y: auto;
+  flex: 1;
+  display: flex;
+  min-height: 0;
 }
 
-.wayhouse-settings-block {
+#wayhouse-panel .wayhouse-body > .wh-section {
+  width: 100%;
+}
+
+#wayhouse-panel .wayhouse-tabs {
+  display: flex;
+  border-bottom: 1px solid #d8c3a5;
+  background: #f3e9dc;
+}
+
+#wayhouse-panel .wh-tab {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 9px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #a08b76;
+  cursor: pointer;
+}
+
+#wayhouse-panel .wh-tab.active {
+  color: #8a6d5c;
+  border-bottom: 2px solid #8a6d5c;
+}
+
+#wayhouse-panel .wh-section {
+  flex-direction: column;
+  height: 100%;
+}
+
+#wayhouse-panel .wh-section[data-section='games'] {
+  display: flex;
+}
+
+.wh-games-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.wh-game-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border: 1px solid #e2d2ba;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  text-align: center;
+}
+
+.wh-game-item:active {
+  background: #f3e9dc;
+}
+
+.wh-game-icon {
+  font-size: 26px;
+}
+
+.wh-game-name {
+  font-size: 12px;
+  color: #6b5443;
+}
+
+.wh-games-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #a08b76;
+  font-size: 13px;
+  padding: 20px 0;
+}
+
+.wh-add-game-btn {
+  margin-top: 12px;
+  width: 100%;
+  text-align: center;
+  border: none;
+}
+
+.wh-game-frame-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  margin-top: 8px;
+}
+
+.wh-game-frame-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px;
+}
+
+.wh-game-back {
+  border: none;
+  background: none;
+  color: #8a6d5c;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.wh-game-title {
+  font-size: 12px;
+  color: #6b5443;
+  font-weight: 700;
+}
+
+.wh-game-iframe {
+  flex: 1;
+  width: 100%;
+  border: 1px solid #e2d2ba;
+  border-radius: 8px;
+  background: #fff;
+}
   border-top: 1px dashed #d8c3a5;
   padding-top: 12px;
   margin-top: 6px;

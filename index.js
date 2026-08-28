@@ -1,7 +1,10 @@
 // 伴窝 / Wayhouse
-// 骨架版本 v0.2：
+// 骨架版本 v0.3：
 // 1. 魔法棒扩展菜单里加入口（跟玩伴小屋同位置）
 // 2. 悬浮球入口：可拖拽、可上传 PNG 头像、圆形/方形可切换、大小可调
+// 3. 小游戏加载器：iframe 沙盒方式，跟主运行时隔离，避免卡顿
+
+import { builtInGames, gamesListHTML, loadGameIntoIframe } from './src/games.js';
 
 const MODULE_NAME = 'wayhouse';
 const MENU_ID = 'wayhouse-menu-item';
@@ -20,6 +23,7 @@ const DEFAULT_SETTINGS = {
   floatingBallSize: 56,
   floatingBallShape: 'circle', // 'circle' | 'square'
   floatingBallImage: '', // base64 dataURL，用户自己传的图
+  customGames: [], // 用户自己添加的外链游戏 {name, icon, file, description}
 };
 
 function getContext() {
@@ -57,49 +61,128 @@ function createPanel() {
       <span>伴窝 · Wayhouse</span>
       <button class="wayhouse-close" title="关闭">×</button>
     </div>
+    <div class="wayhouse-tabs">
+      <button class="wh-tab active" data-tab="home">主页</button>
+      <button class="wh-tab" data-tab="games">小游戏</button>
+    </div>
     <div class="wayhouse-body">
-      <p>骨架已跑通 ✅</p>
-      <p style="opacity:.6;font-size:12px;margin-bottom:14px;">功能正在搭建中……</p>
+      <div class="wh-section" data-section="home">
+        <p>骨架已跑通 ✅</p>
+        <p style="opacity:.6;font-size:12px;margin-bottom:14px;">功能正在搭建中……</p>
 
-      <div class="wayhouse-settings-block">
-        <div class="wayhouse-settings-title">悬浮球设置</div>
+        <div class="wayhouse-settings-block">
+          <div class="wayhouse-settings-title">悬浮球设置</div>
 
-        <label class="wayhouse-row">
-          <span>开启悬浮球</span>
-          <input type="checkbox" id="wh-float-enabled" ${cfg.floatingBallEnabled ? 'checked' : ''}>
-        </label>
-
-        <div class="wayhouse-row">
-          <span>形状</span>
-          <select id="wh-float-shape">
-            <option value="circle" ${cfg.floatingBallShape === 'circle' ? 'selected' : ''}>圆形</option>
-            <option value="square" ${cfg.floatingBallShape === 'square' ? 'selected' : ''}>方形</option>
-          </select>
-        </div>
-
-        <div class="wayhouse-row">
-          <span>大小 <b id="wh-float-size-val">${cfg.floatingBallSize}px</b></span>
-          <input type="range" id="wh-float-size" min="36" max="120" step="2" value="${cfg.floatingBallSize}">
-        </div>
-
-        <div class="wayhouse-row">
-          <span>自定义图片</span>
-          <label class="wayhouse-upload-btn">
-            选择 PNG
-            <input type="file" id="wh-float-image" accept="image/png,image/jpeg" hidden>
+          <label class="wayhouse-row">
+            <span>开启悬浮球</span>
+            <input type="checkbox" id="wh-float-enabled" ${cfg.floatingBallEnabled ? 'checked' : ''}>
           </label>
-        </div>
 
-        <div class="wayhouse-row" ${cfg.floatingBallImage ? '' : 'style="display:none"'} id="wh-float-clear-row">
-          <span></span>
-          <button class="wayhouse-clear-btn" id="wh-float-clear">清除图片</button>
+          <div class="wayhouse-row">
+            <span>形状</span>
+            <select id="wh-float-shape">
+              <option value="circle" ${cfg.floatingBallShape === 'circle' ? 'selected' : ''}>圆形</option>
+              <option value="square" ${cfg.floatingBallShape === 'square' ? 'selected' : ''}>方形</option>
+            </select>
+          </div>
+
+          <div class="wayhouse-row">
+            <span>大小 <b id="wh-float-size-val">${cfg.floatingBallSize}px</b></span>
+            <input type="range" id="wh-float-size" min="36" max="120" step="2" value="${cfg.floatingBallSize}">
+          </div>
+
+          <div class="wayhouse-row">
+            <span>自定义图片</span>
+            <label class="wayhouse-upload-btn">
+              选择 PNG
+              <input type="file" id="wh-float-image" accept="image/png,image/jpeg" hidden>
+            </label>
+          </div>
+
+          <div class="wayhouse-row" ${cfg.floatingBallImage ? '' : 'style="display:none"'} id="wh-float-clear-row">
+            <span></span>
+            <button class="wayhouse-clear-btn" id="wh-float-clear">清除图片</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="wh-section" data-section="games" style="display:none">
+        <div class="wh-games-grid" id="wh-games-grid">${gamesListHTML(cfg.customGames)}</div>
+        <button class="wayhouse-upload-btn wh-add-game-btn" id="wh-add-game">+ 添加外链游戏</button>
+
+        <div class="wh-game-frame-wrap" id="wh-game-frame-wrap" style="display:none">
+          <div class="wh-game-frame-header">
+            <button class="wh-game-back" id="wh-game-back">← 返回列表</button>
+            <span class="wh-game-title" id="wh-game-title"></span>
+          </div>
+          <iframe
+            class="wh-game-iframe"
+            id="wh-game-iframe"
+            frameborder="0"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-orientation-lock allow-popups allow-modals allow-downloads"
+            allow="accelerometer; gyroscope; gamepad; fullscreen; autoplay"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"></iframe>
         </div>
       </div>
     </div>
   `;
   panel.querySelector('.wayhouse-close').addEventListener('click', hidePanel);
   bindSettingsUI(panel);
+  bindTabsUI(panel);
+  bindGamesUI(panel);
   document.body.appendChild(panel);
+}
+
+function bindTabsUI(root) {
+  root.querySelectorAll('.wh-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('.wh-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      root.querySelectorAll('.wh-section').forEach(sec => {
+        sec.style.display = sec.dataset.section === tab ? 'flex' : 'none';
+      });
+    });
+  });
+}
+
+function bindGamesUI(root) {
+  const cfg = getSettings();
+  const grid = root.querySelector('#wh-games-grid');
+  const frameWrap = root.querySelector('#wh-game-frame-wrap');
+  const iframe = root.querySelector('#wh-game-iframe');
+  const titleEl = root.querySelector('#wh-game-title');
+
+  grid.addEventListener('click', e => {
+    const item = e.target.closest('.wh-game-item');
+    if (!item) return;
+    const url = item.dataset.game;
+    const name = item.dataset.name;
+    grid.style.display = 'none';
+    root.querySelector('#wh-add-game').style.display = 'none';
+    frameWrap.style.display = 'flex';
+    titleEl.textContent = name;
+    loadGameIntoIframe(iframe, url, name);
+  });
+
+  root.querySelector('#wh-game-back').addEventListener('click', () => {
+    frameWrap.style.display = 'none';
+    grid.style.display = 'grid';
+    root.querySelector('#wh-add-game').style.display = '';
+    iframe.srcdoc = '';
+  });
+
+  root.querySelector('#wh-add-game').addEventListener('click', () => {
+    const name = prompt('游戏名称:');
+    if (!name) return;
+    const icon = prompt('游戏图标(emoji，可留空):') || '🎮';
+    const url = prompt('游戏链接(单文件 HTML 地址):');
+    if (!url) return;
+    cfg.customGames.push({ name, icon, file: url, description: name });
+    saveSettings();
+    grid.innerHTML = gamesListHTML(cfg.customGames);
+  });
 }
 
 function bindSettingsUI(root) {
