@@ -1,14 +1,15 @@
 #wayhouse-panel {
   position: fixed;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(90vw, 360px);
-  max-height: 70vh;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100dvh;
   background: #fdf6ee;
-  border: 1px solid #d8c3a5;
-  border-radius: 10px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   z-index: 999999;
   display: none;
   flex-direction: column;
@@ -84,7 +85,18 @@
   gap: 10px;
 }
 
+.wh-games-tip {
+  font-size: 11px;
+  color: #a08b76;
+  background: #f3e9dc;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
 .wh-game-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -95,6 +107,60 @@
   background: #fff;
   cursor: pointer;
   text-align: center;
+}
+
+.wh-game-del {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: #c05a45;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.wh-gen-notify {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fff2cc;
+  border: 1px solid #e6c860;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #6b5443;
+}
+
+.wh-gen-notify-btns {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wh-gen-notify-btns button {
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#wh-gen-notify-view {
+  background: #8a6d5c;
+  color: #fff;
+}
+
+#wh-gen-notify-dismiss {
+  background: #eee;
+  color: #6b5443;
 }
 
 .wh-game-item:active {

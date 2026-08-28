@@ -107,12 +107,20 @@ function createPanel() {
       </div>
 
       <div class="wh-section" data-section="games" style="display:none">
+        <p class="wh-games-tip">提示：右上角 × 关闭面板不会清空游戏进度，点悬浮球能随时回来接着玩；"返回列表"才会重新开始。</p>
         <div class="wh-games-grid" id="wh-games-grid">${gamesListHTML(cfg.customGames)}</div>
         <button class="wayhouse-upload-btn wh-add-game-btn" id="wh-add-game">+ 添加外链游戏</button>
 
         <div class="wh-game-frame-wrap" id="wh-game-frame-wrap" style="display:none">
+          <div class="wh-gen-notify" id="wh-gen-notify" style="display:none">
+            <span>楼层生成完成啦，要去看看吗？</span>
+            <div class="wh-gen-notify-btns">
+              <button id="wh-gen-notify-view">去看酒馆</button>
+              <button id="wh-gen-notify-dismiss">继续玩</button>
+            </div>
+          </div>
           <div class="wh-game-frame-header">
-            <button class="wh-game-back" id="wh-game-back">← 返回列表</button>
+            <button class="wh-game-back" id="wh-game-back">← 返回列表（会清空当前进度）</button>
             <span class="wh-game-title" id="wh-game-title"></span>
           </div>
           <iframe
@@ -155,6 +163,14 @@ function bindGamesUI(root) {
   const titleEl = root.querySelector('#wh-game-title');
 
   grid.addEventListener('click', e => {
+    const delBtn = e.target.closest('.wh-game-del');
+    if (delBtn) {
+      const idx = Number(delBtn.dataset.customIndex);
+      cfg.customGames.splice(idx, 1);
+      saveSettings();
+      grid.innerHTML = gamesListHTML(cfg.customGames);
+      return;
+    }
     const item = e.target.closest('.wh-game-item');
     if (!item) return;
     const url = item.dataset.game;
@@ -171,6 +187,7 @@ function bindGamesUI(root) {
     grid.style.display = 'grid';
     root.querySelector('#wh-add-game').style.display = '';
     iframe.srcdoc = '';
+    hideGenNotify();
   });
 
   root.querySelector('#wh-add-game').addEventListener('click', () => {
@@ -183,6 +200,59 @@ function bindGamesUI(root) {
     saveSettings();
     grid.innerHTML = gamesListHTML(cfg.customGames);
   });
+
+  root.querySelector('#wh-gen-notify-view').addEventListener('click', () => {
+    hideGenNotify();
+    hidePanel();
+  });
+  root.querySelector('#wh-gen-notify-dismiss').addEventListener('click', hideGenNotify);
+}
+
+function showGenNotify() {
+  if (!panel) return;
+  const bar = panel.querySelector('#wh-gen-notify');
+  if (bar) bar.style.display = 'flex';
+}
+
+function hideGenNotify() {
+  if (!panel) return;
+  const bar = panel.querySelector('#wh-gen-notify');
+  if (bar) bar.style.display = 'none';
+}
+
+// ===== 楼层生成完成提醒 =====
+let genNotifyBound = false;
+let lastNotifySignature = null;
+
+function bindGenerationNotify() {
+  if (genNotifyBound) return;
+  const context = getContext();
+  const eventTypes = context.event_types || {};
+  const eventName = eventTypes.MESSAGE_RECEIVED || 'MESSAGE_RECEIVED';
+  if (!context.eventSource || typeof context.eventSource.on !== 'function') return;
+  context.eventSource.on(eventName, handleMessageReceived);
+  genNotifyBound = true;
+}
+
+function handleMessageReceived(messageId) {
+  try {
+    if (!isVisible || !panel) return; // 面板没开着不用提醒
+    const frameWrap = panel.querySelector('#wh-game-frame-wrap');
+    if (!frameWrap || frameWrap.style.display === 'none') return; // 只在正玩游戏时提醒
+
+    const context = getContext();
+    const chat = context.chat;
+    const msg = (chat && messageId != null && chat[messageId]) || (chat && chat.length ? chat[chat.length - 1] : null);
+    if (!msg || msg.is_user) return; // 只关心角色的回复，不关心玩家自己发的消息
+
+    const signature = String(messageId ?? 'latest') + '::' + String(msg.mes || msg.message || '').slice(0, 60);
+    if (signature === lastNotifySignature) return;
+    lastNotifySignature = signature;
+
+    showGenNotify();
+  } catch (e) {
+    console.warn('[伴窝] 生成完成提醒出错:', e);
+  }
 }
 
 function bindSettingsUI(root) {
@@ -434,6 +504,7 @@ function bindFloatBallDrag(btn) {
 function init() {
   addMenuItem();
   syncFloatBall();
+  bindGenerationNotify();
   console.info('[伴窝] 扩展已加载:', MODULE_NAME);
 }
 
