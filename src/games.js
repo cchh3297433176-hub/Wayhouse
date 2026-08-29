@@ -52,13 +52,20 @@ export function gamesListHTML(customGames = []) {
   return all
     .map(
       g => `
-      <div class="wh-game-item" data-game="${escapeAttr(g.file)}" data-name="${escapeAttr(g.name)}" title="${escapeAttr(g.description || '')}">
+      <div class="wh-game-item" data-game="${escapeAttr(g.file)}" data-name="${escapeAttr(g.name)}" title="${escapeAttr(g.description || '')}" ${g.custom ? `data-custom-index="${g.customIndex}"` : ''}>
         ${g.custom ? `<button class="wh-game-del" data-custom-index="${g.customIndex}" title="删除">×</button>` : ''}
-        <div class="wh-game-icon">${g.icon || '🎮'}</div>
+        ${renderIcon(g.icon)}
         <div class="wh-game-name">${escapeHtml(g.name)}</div>
       </div>`,
     )
     .join('');
+}
+
+function renderIcon(icon) {
+  if (icon && typeof icon === 'string' && icon.startsWith('data:image')) {
+    return `<img class="wh-game-icon-img" src="${icon}" alt="">`;
+  }
+  return `<div class="wh-game-icon">${icon || '🎮'}</div>`;
 }
 
 function escapeHtml(str) {
