@@ -106,10 +106,12 @@ function createPanel() {
         </div>
       </div>
 
-      <div class="wh-section" data-section="games" style="display:none">
-        <p class="wh-games-tip">提示：右上角 × 关闭面板不会清空游戏进度，点悬浮球能随时回来接着玩；"返回列表"才会重新开始。</p>
-        <div class="wh-games-grid" id="wh-games-grid">${gamesListHTML(cfg.customGames)}</div>
-        <button class="wayhouse-upload-btn wh-add-game-btn" id="wh-add-game">+ 添加外链游戏</button>
+      <div class="wh-section" data-section="games" style="display:none" id="wh-games-section">
+        <div class="wh-games-scroll" id="wh-games-scroll">
+          <p class="wh-games-tip">提示：右上角 × 关闭面板不会清空游戏进度，点悬浮球能随时回来接着玩；"返回列表"才会重新开始。长按卡片可编辑。</p>
+          <div class="wh-games-grid" id="wh-games-grid">${gamesListHTML(cfg.customGames)}</div>
+          <button class="wayhouse-upload-btn wh-add-game-btn" id="wh-add-game">+ 添加外链游戏</button>
+        </div>
 
         <div class="wh-game-frame-wrap" id="wh-game-frame-wrap" style="display:none">
           <div class="wh-gen-notify" id="wh-gen-notify" style="display:none">
@@ -134,6 +136,44 @@ function createPanel() {
         </div>
       </div>
     </div>
+
+    <div class="wh-modal-overlay" id="wh-game-modal-overlay" style="display:none">
+      <div class="wh-modal">
+        <div class="wh-modal-title" id="wh-game-modal-title">添加游戏</div>
+
+        <label class="wayhouse-row">
+          <span>名称</span>
+          <input type="text" id="wh-modal-name" maxlength="10" placeholder="游戏名字">
+        </label>
+
+        <div class="wayhouse-row">
+          <span>图标</span>
+          <div class="wh-modal-icon-picker">
+            <input type="text" id="wh-modal-emoji" maxlength="4" placeholder="emoji">
+            <label class="wayhouse-upload-btn wh-modal-icon-upload-btn">
+              传图片
+              <input type="file" id="wh-modal-icon-file" accept="image/*" hidden>
+            </label>
+          </div>
+        </div>
+        <div class="wh-modal-icon-preview-row">
+          <span>预览：</span>
+          <span id="wh-modal-icon-preview">🎮</span>
+          <button id="wh-modal-icon-clear" class="wh-modal-icon-clear" style="display:none">清除图片</button>
+        </div>
+
+        <label class="wayhouse-row wh-modal-url-row">
+          <span>游戏链接</span>
+        </label>
+        <input type="text" id="wh-modal-url" class="wh-modal-url-input" placeholder="https://...">
+
+        <div class="wh-modal-btns">
+          <button id="wh-modal-delete" class="wh-modal-delete-btn" style="display:none">删除</button>
+          <button id="wh-modal-cancel" class="wh-modal-cancel-btn">取消</button>
+          <button id="wh-modal-save" class="wh-modal-save-btn">保存</button>
+        </div>
+      </div>
+    </div>
   `;
   panel.querySelector('.wayhouse-close').addEventListener('click', hidePanel);
   bindSettingsUI(panel);
@@ -155,6 +195,8 @@ function bindTabsUI(root) {
   });
 }
 
+const LONG_PRESS_MS = 500;
+
 function bindGamesUI(root) {
   const cfg = getSettings();
   const grid = root.querySelector('#wh-games-grid');
@@ -162,13 +204,45 @@ function bindGamesUI(root) {
   const iframe = root.querySelector('#wh-game-iframe');
   const titleEl = root.querySelector('#wh-game-title');
 
+  let longPressTimer = null;
+  let longPressFired = false;
+  let pressStartX = 0;
+  let pressStartY = 0;
+
+  grid.addEventListener('pointerdown', e => {
+    const item = e.target.closest('.wh-game-item');
+    if (!item || item.dataset.customIndex === undefined) return; // 内置游戏不支持长按编辑
+    longPressFired = false;
+    pressStartX = e.clientX;
+    pressStartY = e.clientY;
+    longPressTimer = setTimeout(() => {
+      longPressFired = true;
+      openGameModal(root, 'edit', Number(item.dataset.customIndex));
+    }, LONG_PRESS_MS);
+  });
+
+  const cancelLongPress = () => {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  };
+
+  grid.addEventListener('pointermove', e => {
+    if (!longPressTimer) return;
+    if (Math.abs(e.clientX - pressStartX) + Math.abs(e.clientY - pressStartY) > 10) cancelLongPress();
+  });
+  grid.addEventListener('pointerup', cancelLongPress);
+  grid.addEventListener('pointercancel', cancelLongPress);
+
   grid.addEventListener('click', e => {
+    if (longPressFired) { longPressFired = false; return; } // 长按触发过，这次点击不响应
+
     const delBtn = e.target.closest('.wh-game-del');
     if (delBtn) {
       const idx = Number(delBtn.dataset.customIndex);
-      cfg.customGames.splice(idx, 1);
-      saveSettings();
-      grid.innerHTML = gamesListHTML(cfg.customGames);
+      if (confirm('确定删除这个游戏？')) {
+        cfg.customGames.splice(idx, 1);
+        saveSettings();
+        grid.innerHTML = gamesListHTML(cfg.customGames);
+      }
       return;
     }
     const item = e.target.closest('.wh-game-item');
@@ -176,8 +250,9 @@ function bindGamesUI(root) {
     const url = item.dataset.game;
     const name = item.dataset.name;
     grid.style.display = 'none';
-    root.querySelector('#wh-add-game').style.display = 'none';
+    root.querySelector('#wh-games-scroll').style.display = 'none';
     frameWrap.style.display = 'flex';
+    root.querySelector('#wh-games-section').style.overflow = 'hidden';
     titleEl.textContent = name;
     loadGameIntoIframe(iframe, url, name);
   });
@@ -185,20 +260,14 @@ function bindGamesUI(root) {
   root.querySelector('#wh-game-back').addEventListener('click', () => {
     frameWrap.style.display = 'none';
     grid.style.display = 'grid';
-    root.querySelector('#wh-add-game').style.display = '';
+    root.querySelector('#wh-games-scroll').style.display = '';
+    root.querySelector('#wh-games-section').style.overflow = 'auto';
     iframe.srcdoc = '';
     hideGenNotify();
   });
 
   root.querySelector('#wh-add-game').addEventListener('click', () => {
-    const name = prompt('游戏名称:');
-    if (!name) return;
-    const icon = prompt('游戏图标(emoji，可留空):') || '🎮';
-    const url = prompt('游戏链接(单文件 HTML 地址):');
-    if (!url) return;
-    cfg.customGames.push({ name, icon, file: url, description: name });
-    saveSettings();
-    grid.innerHTML = gamesListHTML(cfg.customGames);
+    openGameModal(root, 'add', null);
   });
 
   root.querySelector('#wh-gen-notify-view').addEventListener('click', () => {
@@ -206,6 +275,126 @@ function bindGamesUI(root) {
     hidePanel();
   });
   root.querySelector('#wh-gen-notify-dismiss').addEventListener('click', hideGenNotify);
+
+  bindGameModalUI(root);
+}
+
+// ===== 添加/编辑游戏弹窗 =====
+let modalMode = 'add'; // 'add' | 'edit'
+let modalEditIndex = null;
+let modalIconDataUrl = ''; // 用户上传的本地图片(dataURL)，优先于 emoji
+
+function openGameModal(root, mode, index) {
+  modalMode = mode;
+  modalEditIndex = index;
+  modalIconDataUrl = '';
+
+  const overlay = root.querySelector('#wh-game-modal-overlay');
+  const nameInput = root.querySelector('#wh-modal-name');
+  const emojiInput = root.querySelector('#wh-modal-emoji');
+  const urlInput = root.querySelector('#wh-modal-url');
+  const preview = root.querySelector('#wh-modal-icon-preview');
+  const clearBtn = root.querySelector('#wh-modal-icon-clear');
+  const deleteBtn = root.querySelector('#wh-modal-delete');
+  const title = root.querySelector('#wh-game-modal-title');
+
+  if (mode === 'edit') {
+    const cfg = getSettings();
+    const game = cfg.customGames[index];
+    title.textContent = '编辑游戏';
+    nameInput.value = game.name || '';
+    urlInput.value = game.file || '';
+    if (game.icon && game.icon.startsWith('data:image')) {
+      modalIconDataUrl = game.icon;
+      emojiInput.value = '';
+      preview.innerHTML = `<img src="${game.icon}" style="width:28px;height:28px;border-radius:6px;object-fit:cover;">`;
+      clearBtn.style.display = '';
+    } else {
+      emojiInput.value = game.icon || '';
+      preview.textContent = game.icon || '🎮';
+      clearBtn.style.display = 'none';
+    }
+    deleteBtn.style.display = '';
+  } else {
+    title.textContent = '添加游戏';
+    nameInput.value = '';
+    emojiInput.value = '';
+    urlInput.value = '';
+    preview.textContent = '🎮';
+    clearBtn.style.display = 'none';
+    deleteBtn.style.display = 'none';
+  }
+
+  overlay.style.display = 'flex';
+}
+
+function closeGameModal(root) {
+  root.querySelector('#wh-game-modal-overlay').style.display = 'none';
+}
+
+function bindGameModalUI(root) {
+  const emojiInput = root.querySelector('#wh-modal-emoji');
+  const preview = root.querySelector('#wh-modal-icon-preview');
+  const clearBtn = root.querySelector('#wh-modal-icon-clear');
+  const fileInput = root.querySelector('#wh-modal-icon-file');
+
+  emojiInput.addEventListener('input', () => {
+    if (modalIconDataUrl) return; // 传了图片就不响应 emoji 输入，避免打架
+    preview.textContent = emojiInput.value || '🎮';
+  });
+
+  fileInput.addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    resizeImageToDataURL(file, 128).then(dataUrl => {
+      modalIconDataUrl = dataUrl;
+      preview.innerHTML = `<img src="${dataUrl}" style="width:28px;height:28px;border-radius:6px;object-fit:cover;">`;
+      clearBtn.style.display = '';
+    });
+  });
+
+  clearBtn.addEventListener('click', () => {
+    modalIconDataUrl = '';
+    fileInput.value = '';
+    preview.textContent = emojiInput.value || '🎮';
+    clearBtn.style.display = 'none';
+  });
+
+  root.querySelector('#wh-modal-cancel').addEventListener('click', () => closeGameModal(root));
+  root.querySelector('#wh-game-modal-overlay').addEventListener('click', e => {
+    if (e.target.id === 'wh-game-modal-overlay') closeGameModal(root);
+  });
+
+  root.querySelector('#wh-modal-save').addEventListener('click', () => {
+    const cfg = getSettings();
+    const name = root.querySelector('#wh-modal-name').value.trim();
+    const url = root.querySelector('#wh-modal-url').value.trim();
+    const emoji = root.querySelector('#wh-modal-emoji').value.trim();
+    if (!name || !url) {
+      alert('名称和链接不能为空');
+      return;
+    }
+    const icon = modalIconDataUrl || emoji || '🎮';
+    const entry = { name, icon, file: url, description: name };
+
+    if (modalMode === 'edit') {
+      cfg.customGames[modalEditIndex] = entry;
+    } else {
+      cfg.customGames.push(entry);
+    }
+    saveSettings();
+    root.querySelector('#wh-games-grid').innerHTML = gamesListHTML(cfg.customGames);
+    closeGameModal(root);
+  });
+
+  root.querySelector('#wh-modal-delete').addEventListener('click', () => {
+    if (!confirm('确定删除这个游戏？')) return;
+    const cfg = getSettings();
+    cfg.customGames.splice(modalEditIndex, 1);
+    saveSettings();
+    root.querySelector('#wh-games-grid').innerHTML = gamesListHTML(cfg.customGames);
+    closeGameModal(root);
+  });
 }
 
 function showGenNotify() {

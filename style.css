@@ -77,6 +77,19 @@
 
 #wayhouse-panel .wh-section[data-section='games'] {
   display: flex;
+  position: relative;
+  overflow: auto;
+}
+
+.wh-games-scroll {
+  width: 100%;
+}
+
+.wh-game-icon-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  object-fit: cover;
 }
 
 .wh-games-grid {
@@ -227,6 +240,8 @@
   border-radius: 8px;
   background: #fff;
 }
+
+.wayhouse-settings-block {
   border-top: 1px dashed #d8c3a5;
   padding-top: 12px;
   margin-top: 6px;
@@ -303,4 +318,125 @@
   font-size: 60%;
   color: #fff;
   pointer-events: none;
+}
+
+/* 添加/编辑游戏弹窗 */
+.wh-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9999999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.wh-modal {
+  width: min(100%, 340px);
+  background: #fdf6ee;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+.wh-modal-title {
+  font-weight: 700;
+  color: #6b5443;
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.wh-modal input[type='text'] {
+  border: 1px solid #e2d2ba;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: #fff;
+  max-width: 150px;
+}
+
+.wh-modal-icon-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wh-modal-icon-picker input[type='text'] {
+  width: 50px;
+  max-width: 50px;
+  text-align: center;
+}
+
+.wh-modal-icon-upload-btn {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.wh-modal-icon-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b5443;
+  padding: 6px 0;
+}
+
+#wh-modal-icon-preview {
+  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.wh-modal-icon-clear {
+  border: 1px solid #c98b7a;
+  color: #c05a45;
+  background: none;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.wh-modal-url-row {
+  padding-bottom: 4px;
+}
+
+.wh-modal-url-input {
+  width: 100%;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+.wh-modal-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.wh-modal-btns button {
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wh-modal-delete-btn {
+  background: none;
+  border: 1px solid #c98b7a !important;
+  color: #c05a45;
+  margin-right: auto;
+}
+
+.wh-modal-cancel-btn {
+  background: #eee;
+  color: #6b5443;
+}
+
+.wh-modal-save-btn {
+  background: #8a6d5c;
+  color: #fff;
 }
