@@ -282,21 +282,28 @@ function bindGamesUI(root) {
   let pressStartX = 0;
   let pressStartY = 0;
 
+  const cancelLongPress = () => {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  };
+
   grid.addEventListener('pointerdown', e => {
     const item = e.target.closest('.wh-game-item');
     if (!item || item.dataset.customIndex === undefined) return; // 内置游戏不支持长按编辑
+    if (e.target.closest('.wh-game-del')) return; // 删除按钮不参与长按编辑
+
+    // Android/WebView 长按默认会唤起“复制/全选/网络搜索”的文本选择菜单。
+    // 这里的编辑手势由我们自己的计时器处理，因此阻止默认长按行为。
+    e.preventDefault();
+    cancelLongPress();
     longPressFired = false;
     pressStartX = e.clientX;
     pressStartY = e.clientY;
     longPressTimer = setTimeout(() => {
+      longPressTimer = null;
       longPressFired = true;
       openGameModal(document, 'edit', Number(item.dataset.customIndex));
     }, LONG_PRESS_MS);
   });
-
-  const cancelLongPress = () => {
-    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-  };
 
   grid.addEventListener('pointermove', e => {
     if (!longPressTimer) return;
