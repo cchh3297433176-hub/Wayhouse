@@ -63,6 +63,67 @@ let panel = null;
 let isVisible = false;
 let floatBall = null;
 
+// 弹窗单独挂在 document.body 下，不作为面板的子元素。
+// 面板本身是 position:fixed，嵌套在里面的 fixed 弹窗在部分手机浏览器/WebView
+// 上会被错误裁剪/错位（跟悬浮球同理，悬浮球从一开始就是挂在 body 下才没出过问题）。
+function createModalsRoot() {
+  if (document.querySelector('#wh-modals-root')) return;
+  const root = document.createElement('div');
+  root.id = 'wh-modals-root';
+  root.innerHTML = `
+    <div class="wh-modal-overlay" id="wh-model-modal-overlay" style="display:none">
+      <div class="wh-modal">
+        <div class="wh-modal-title">选择模型</div>
+        <input type="text" id="wh-model-filter" class="wh-modal-url-input" placeholder="输入关键字筛选/锁定">
+        <div id="wh-model-list" class="wh-model-list"></div>
+        <div class="wh-modal-btns">
+          <button id="wh-model-modal-close" class="wh-modal-cancel-btn">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="wh-modal-overlay" id="wh-game-modal-overlay" style="display:none">
+      <div class="wh-modal">
+        <div class="wh-modal-title" id="wh-game-modal-title">添加游戏</div>
+
+        <label class="wayhouse-row">
+          <span>名称</span>
+          <input type="text" id="wh-modal-name" maxlength="10" placeholder="游戏名字">
+        </label>
+
+        <div class="wayhouse-row">
+          <span>图标</span>
+          <div class="wh-modal-icon-picker">
+            <input type="text" id="wh-modal-emoji" maxlength="4" placeholder="emoji">
+            <label class="wayhouse-upload-btn wh-modal-icon-upload-btn">
+              传图片
+              <input type="file" id="wh-modal-icon-file" accept="image/*" hidden>
+            </label>
+          </div>
+        </div>
+        <div class="wh-modal-icon-preview-row">
+          <span>预览：</span>
+          <span id="wh-modal-icon-preview">🎮</span>
+          <button id="wh-modal-icon-clear" class="wh-modal-icon-clear" style="display:none">清除图片</button>
+        </div>
+
+        <label class="wayhouse-row wh-modal-url-row">
+          <span>游戏链接</span>
+        </label>
+        <input type="text" id="wh-modal-url" class="wh-modal-url-input" placeholder="https://...">
+
+        <div class="wh-modal-btns">
+          <button id="wh-modal-delete" class="wh-modal-delete-btn" style="display:none">删除</button>
+          <button id="wh-modal-cancel" class="wh-modal-cancel-btn">取消</button>
+          <button id="wh-modal-save" class="wh-modal-save-btn">保存</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(root);
+  bindGameModalUI(document);
+}
+
 function createPanel() {
   const cfg = getSettings();
   panel = document.createElement('div');
@@ -183,53 +244,6 @@ function createPanel() {
       </div>
     </div>
 
-    <div class="wh-modal-overlay" id="wh-model-modal-overlay" style="display:none">
-      <div class="wh-modal">
-        <div class="wh-modal-title">选择模型</div>
-        <input type="text" id="wh-model-filter" class="wh-modal-url-input" placeholder="输入关键字筛选/锁定">
-        <div id="wh-model-list" class="wh-model-list"></div>
-        <div class="wh-modal-btns">
-          <button id="wh-model-modal-close" class="wh-modal-cancel-btn">关闭</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="wh-modal-overlay" id="wh-game-modal-overlay" style="display:none">
-      <div class="wh-modal">
-        <div class="wh-modal-title" id="wh-game-modal-title">添加游戏</div>
-
-        <label class="wayhouse-row">
-          <span>名称</span>
-          <input type="text" id="wh-modal-name" maxlength="10" placeholder="游戏名字">
-        </label>
-
-        <div class="wayhouse-row">
-          <span>图标</span>
-          <div class="wh-modal-icon-picker">
-            <input type="text" id="wh-modal-emoji" maxlength="4" placeholder="emoji">
-            <label class="wayhouse-upload-btn wh-modal-icon-upload-btn">
-              传图片
-              <input type="file" id="wh-modal-icon-file" accept="image/*" hidden>
-            </label>
-          </div>
-        </div>
-        <div class="wh-modal-icon-preview-row">
-          <span>预览：</span>
-          <span id="wh-modal-icon-preview">🎮</span>
-          <button id="wh-modal-icon-clear" class="wh-modal-icon-clear" style="display:none">清除图片</button>
-        </div>
-
-        <label class="wayhouse-row wh-modal-url-row">
-          <span>游戏链接</span>
-        </label>
-        <input type="text" id="wh-modal-url" class="wh-modal-url-input" placeholder="https://...">
-
-        <div class="wh-modal-btns">
-          <button id="wh-modal-delete" class="wh-modal-delete-btn" style="display:none">删除</button>
-          <button id="wh-modal-cancel" class="wh-modal-cancel-btn">取消</button>
-          <button id="wh-modal-save" class="wh-modal-save-btn">保存</button>
-        </div>
-      </div>
     </div>
   `;
   panel.querySelector('.wayhouse-close').addEventListener('click', hidePanel);
@@ -238,6 +252,7 @@ function createPanel() {
   bindGamesUI(panel);
   bindApiSettingsUI(panel);
   document.body.appendChild(panel);
+  createModalsRoot();
 }
 
 function bindTabsUI(root) {
@@ -275,7 +290,7 @@ function bindGamesUI(root) {
     pressStartY = e.clientY;
     longPressTimer = setTimeout(() => {
       longPressFired = true;
-      openGameModal(root, 'edit', Number(item.dataset.customIndex));
+      openGameModal(document, 'edit', Number(item.dataset.customIndex));
     }, LONG_PRESS_MS);
   });
 
@@ -325,7 +340,7 @@ function bindGamesUI(root) {
   });
 
   root.querySelector('#wh-add-game').addEventListener('click', () => {
-    openGameModal(root, 'add', null);
+    openGameModal(document, 'add', null);
   });
 
   root.querySelector('#wh-gen-notify-view').addEventListener('click', () => {
@@ -333,8 +348,6 @@ function bindGamesUI(root) {
     hidePanel();
   });
   root.querySelector('#wh-gen-notify-dismiss').addEventListener('click', hideGenNotify);
-
-  bindGameModalUI(root);
 }
 
 // ===== 独立 API 设置 =====
@@ -395,7 +408,7 @@ function bindApiSettingsUI(root) {
     const result = await fetchModelList(baseUrl, apiKey);
     if (!result.ok) { statusEl.textContent = result.error; return; }
     statusEl.textContent = `拉到 ${result.models.length} 个模型`;
-    openModelPickerModal(root, result.models, chosen => {
+    openModelPickerModal(document, result.models, chosen => {
       modelInput.value = chosen;
     });
   });
