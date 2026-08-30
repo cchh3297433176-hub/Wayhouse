@@ -92,9 +92,12 @@ export async function loadGameIntoIframe(iframe, url, name) {
     if (needsJQuery) {
       headContent += `<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>`;
     }
+    // 不强制 overflow:hidden —— 像飞行棋这种内容比较长、需要上下滚动才能看全的游戏，
+    // 强制隐藏滚动会把下面的内容裁掉。只统一去掉默认边距、让宽度撑满。
     headContent += `<style>
-      html, body { margin:0!important; padding:0!important; width:100%!important; height:100%!important; overflow:hidden!important; }
-      canvas { width:100%!important; height:auto!important; }
+      html, body { margin:0!important; padding:0!important; width:100%!important; }
+      body { min-height:100%; overflow-x:hidden; -webkit-overflow-scrolling:touch; }
+      canvas { max-width:100%!important; height:auto!important; }
     </style>`;
 
     let finalHtml = html;
