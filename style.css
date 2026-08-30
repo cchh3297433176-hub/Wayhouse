@@ -327,13 +327,16 @@
   background: rgba(0, 0, 0, 0.45);
   z-index: 9999999;
   display: none;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 20px;
+  overflow-y: auto;
 }
 
 .wh-modal {
   width: min(100%, 340px);
+  max-height: 85vh;
+  overflow-y: auto;
   background: #fdf6ee;
   border-radius: 12px;
   padding: 16px;
@@ -439,4 +442,88 @@
 .wh-modal-save-btn {
   background: #8a6d5c;
   color: #fff;
+}
+
+/* API 设置 */
+.wh-api-status {
+  font-size: 11px;
+  color: #a08b76;
+  min-height: 14px;
+  margin: 4px 0 8px;
+}
+
+.wh-api-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wh-preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e2d2ba;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.wh-preset-name {
+  font-size: 12px;
+  color: #6b5443;
+}
+
+.wh-preset-name b {
+  color: #8a6d5c;
+  font-weight: 700;
+}
+
+.wh-preset-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wh-preset-actions button {
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.wh-preset-apply {
+  background: #8a6d5c;
+  color: #fff;
+}
+
+.wh-preset-del {
+  background: none;
+  border: 1px solid #c98b7a !important;
+  color: #c05a45;
+}
+
+.wh-model-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.wh-model-item {
+  padding: 8px 10px;
+  border: 1px solid #e2d2ba;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  color: #6b5443;
+  cursor: pointer;
+  word-break: break-all;
+}
+
+.wh-model-item:active {
+  background: #f3e9dc;
 }

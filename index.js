@@ -5,6 +5,7 @@
 // 3. 小游戏加载器：iframe 沙盒方式，跟主运行时隔离，避免卡顿
 
 import { builtInGames, gamesListHTML, loadGameIntoIframe } from './src/games.js';
+import { normalizeBaseUrl, cleanText, fetchModelList, filterModels, createPreset } from './src/apiConfig.js';
 
 const MODULE_NAME = 'wayhouse';
 const MENU_ID = 'wayhouse-menu-item';
@@ -24,6 +25,11 @@ const DEFAULT_SETTINGS = {
   floatingBallShape: 'circle', // 'circle' | 'square'
   floatingBallImage: '', // base64 dataURL，用户自己传的图
   customGames: [], // 用户自己添加的外链游戏 {name, icon, file, description}
+  apiConfig: {
+    mode: 'main', // 'main' 跟随酒馆主设置 | 'custom' 自定义接口
+    presets: [], // [{id, name, baseUrl, apiKey, model}]
+    activePresetId: null,
+  },
 };
 
 function getContext() {
@@ -38,9 +44,14 @@ function getSettings() {
   // 补齐新增字段，兼容老设置
   for (const key of Object.keys(DEFAULT_SETTINGS)) {
     if (extensionSettings[MODULE_NAME][key] === undefined) {
-      extensionSettings[MODULE_NAME][key] = DEFAULT_SETTINGS[key];
+      extensionSettings[MODULE_NAME][key] = structuredClone(DEFAULT_SETTINGS[key]);
     }
   }
+  const apiCfg = extensionSettings[MODULE_NAME].apiConfig || {};
+  if (apiCfg.mode === undefined) apiCfg.mode = 'main';
+  if (!Array.isArray(apiCfg.presets)) apiCfg.presets = [];
+  if (apiCfg.activePresetId === undefined) apiCfg.activePresetId = null;
+  extensionSettings[MODULE_NAME].apiConfig = apiCfg;
   return extensionSettings[MODULE_NAME];
 }
 
@@ -64,6 +75,7 @@ function createPanel() {
     <div class="wayhouse-tabs">
       <button class="wh-tab active" data-tab="home">主页</button>
       <button class="wh-tab" data-tab="games">小游戏</button>
+      <button class="wh-tab" data-tab="api">接口</button>
     </div>
     <div class="wayhouse-body">
       <div class="wh-section" data-section="home">
@@ -135,6 +147,51 @@ function createPanel() {
             referrerpolicy="no-referrer-when-downgrade"></iframe>
         </div>
       </div>
+
+      <div class="wh-section" data-section="api" style="display:none">
+        <div class="wayhouse-row">
+          <span>使用方式</span>
+          <select id="wh-api-mode">
+            <option value="main" ${cfg.apiConfig.mode === 'main' ? 'selected' : ''}>跟随酒馆主设置</option>
+            <option value="custom" ${cfg.apiConfig.mode === 'custom' ? 'selected' : ''}>自定义接口</option>
+          </select>
+        </div>
+
+        <div id="wh-api-custom-block" style="${cfg.apiConfig.mode === 'custom' ? '' : 'display:none'}">
+          <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <span>接口地址 Base URL</span>
+            <input type="text" id="wh-api-baseurl" class="wh-modal-url-input" placeholder="https://xxx.com/v1">
+          </label>
+          <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <span>API Key</span>
+            <input type="password" id="wh-api-key" class="wh-modal-url-input" placeholder="sk-...">
+          </label>
+          <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <span>模型</span>
+            <div style="display:flex;gap:6px;width:100%;">
+              <input type="text" id="wh-api-model" class="wh-modal-url-input" style="flex:1;margin-bottom:0;" placeholder="模型 ID">
+              <button class="wayhouse-upload-btn" id="wh-api-fetch-models" style="flex-shrink:0;">拉取模型</button>
+            </div>
+          </label>
+          <div id="wh-api-status" class="wh-api-status"></div>
+
+          <button class="wayhouse-upload-btn" id="wh-api-save-preset" style="width:100%;margin-top:10px;">+ 另存为新预设</button>
+
+          <div class="wayhouse-settings-title" style="margin-top:16px;">已保存预设</div>
+          <div id="wh-api-preset-list" class="wh-api-preset-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wh-modal-overlay" id="wh-model-modal-overlay" style="display:none">
+      <div class="wh-modal">
+        <div class="wh-modal-title">选择模型</div>
+        <input type="text" id="wh-model-filter" class="wh-modal-url-input" placeholder="输入关键字筛选/锁定">
+        <div id="wh-model-list" class="wh-model-list"></div>
+        <div class="wh-modal-btns">
+          <button id="wh-model-modal-close" class="wh-modal-cancel-btn">关闭</button>
+        </div>
+      </div>
     </div>
 
     <div class="wh-modal-overlay" id="wh-game-modal-overlay" style="display:none">
@@ -179,6 +236,7 @@ function createPanel() {
   bindSettingsUI(panel);
   bindTabsUI(panel);
   bindGamesUI(panel);
+  bindApiSettingsUI(panel);
   document.body.appendChild(panel);
 }
 
@@ -279,7 +337,154 @@ function bindGamesUI(root) {
   bindGameModalUI(root);
 }
 
-// ===== 添加/编辑游戏弹窗 =====
+// ===== 独立 API 设置 =====
+function escapeHtmlLocal(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+let apiPresetDeleteHoldTimer = null;
+
+function bindApiSettingsUI(root) {
+  const cfg = getSettings();
+  const modeSelect = root.querySelector('#wh-api-mode');
+  const customBlock = root.querySelector('#wh-api-custom-block');
+  const baseUrlInput = root.querySelector('#wh-api-baseurl');
+  const keyInput = root.querySelector('#wh-api-key');
+  const modelInput = root.querySelector('#wh-api-model');
+  const statusEl = root.querySelector('#wh-api-status');
+  const presetListEl = root.querySelector('#wh-api-preset-list');
+
+  function fillFormFromActivePreset() {
+    const preset = cfg.apiConfig.presets.find(p => p.id === cfg.apiConfig.activePresetId);
+    baseUrlInput.value = preset?.baseUrl || '';
+    keyInput.value = preset?.apiKey || '';
+    modelInput.value = preset?.model || '';
+  }
+  fillFormFromActivePreset();
+
+  function renderPresetList() {
+    const presets = cfg.apiConfig.presets;
+    if (!presets.length) {
+      presetListEl.innerHTML = `<div class="wh-games-empty">还没有保存的预设</div>`;
+      return;
+    }
+    presetListEl.innerHTML = presets
+      .map(p => `
+        <div class="wh-preset-item">
+          <span class="wh-preset-name">${escapeHtmlLocal(p.name)}${cfg.apiConfig.activePresetId === p.id ? ' <b>· 使用中</b>' : ''}</span>
+          <div class="wh-preset-actions">
+            <button class="wh-preset-apply" data-id="${p.id}">使用</button>
+            <button class="wh-preset-del" data-id="${p.id}">删除</button>
+          </div>
+        </div>`)
+      .join('');
+  }
+  renderPresetList();
+
+  modeSelect.addEventListener('change', () => {
+    cfg.apiConfig.mode = modeSelect.value;
+    saveSettings();
+    customBlock.style.display = cfg.apiConfig.mode === 'custom' ? '' : 'none';
+  });
+
+  root.querySelector('#wh-api-fetch-models').addEventListener('click', async () => {
+    const baseUrl = normalizeBaseUrl(baseUrlInput.value);
+    const apiKey = cleanText(keyInput.value);
+    if (!baseUrl) { statusEl.textContent = '请先填写接口地址'; return; }
+    statusEl.textContent = '正在拉取模型列表...';
+    const result = await fetchModelList(baseUrl, apiKey);
+    if (!result.ok) { statusEl.textContent = result.error; return; }
+    statusEl.textContent = `拉到 ${result.models.length} 个模型`;
+    openModelPickerModal(root, result.models, chosen => {
+      modelInput.value = chosen;
+    });
+  });
+
+  root.querySelector('#wh-api-save-preset').addEventListener('click', () => {
+    const name = prompt('给这套配置起个名字（备注）:');
+    if (!name) return;
+    const preset = createPreset(name, {
+      baseUrl: baseUrlInput.value,
+      apiKey: keyInput.value,
+      model: modelInput.value,
+    });
+    cfg.apiConfig.presets.push(preset);
+    cfg.apiConfig.activePresetId = preset.id;
+    saveSettings();
+    renderPresetList();
+  });
+
+  presetListEl.addEventListener('click', e => {
+    const applyBtn = e.target.closest('.wh-preset-apply');
+    if (applyBtn) {
+      cfg.apiConfig.activePresetId = applyBtn.dataset.id;
+      saveSettings();
+      fillFormFromActivePreset();
+      renderPresetList();
+      return;
+    }
+    const delBtn = e.target.closest('.wh-preset-del');
+    if (delBtn) {
+      if (!confirm('确定删除这个预设？')) return;
+      const id = delBtn.dataset.id;
+      cfg.apiConfig.presets = cfg.apiConfig.presets.filter(p => p.id !== id);
+      if (cfg.apiConfig.activePresetId === id) cfg.apiConfig.activePresetId = null;
+      saveSettings();
+      renderPresetList();
+    }
+  });
+
+  // 输入框改动即时存草稿到当前激活预设（如果有），避免切走 Tab 丢内容
+  [baseUrlInput, keyInput, modelInput].forEach(input => {
+    input.addEventListener('change', () => {
+      const preset = cfg.apiConfig.presets.find(p => p.id === cfg.apiConfig.activePresetId);
+      if (!preset) return;
+      preset.baseUrl = normalizeBaseUrl(baseUrlInput.value);
+      preset.apiKey = cleanText(keyInput.value);
+      preset.model = cleanText(modelInput.value);
+      saveSettings();
+    });
+  });
+}
+
+function openModelPickerModal(root, models, onPick) {
+  const overlay = root.querySelector('#wh-model-modal-overlay');
+  const listEl = root.querySelector('#wh-model-list');
+  const filterInput = root.querySelector('#wh-model-filter');
+  filterInput.value = '';
+
+  function render() {
+    const filtered = filterModels(models, filterInput.value);
+    listEl.innerHTML = filtered.length
+      ? filtered.map(m => `<div class="wh-model-item" data-model="${escapeHtmlLocal(m)}">${escapeHtmlLocal(m)}</div>`).join('')
+      : `<div class="wh-games-empty">没有匹配的模型</div>`;
+  }
+  render();
+
+  const onFilterInput = () => render();
+  filterInput.addEventListener('input', onFilterInput);
+
+  const onListClick = e => {
+    const item = e.target.closest('.wh-model-item');
+    if (!item) return;
+    onPick(item.dataset.model);
+    cleanup();
+  };
+  listEl.addEventListener('click', onListClick);
+
+  const closeBtn = root.querySelector('#wh-model-modal-close');
+  const onClose = () => cleanup();
+  closeBtn.addEventListener('click', onClose);
+
+  function cleanup() {
+    overlay.style.display = 'none';
+    filterInput.removeEventListener('input', onFilterInput);
+    listEl.removeEventListener('click', onListClick);
+    closeBtn.removeEventListener('click', onClose);
+  }
+
+  overlay.style.display = 'flex';
+}
 let modalMode = 'add'; // 'add' | 'edit'
 let modalEditIndex = null;
 let modalIconDataUrl = ''; // 用户上传的本地图片(dataURL)，优先于 emoji
