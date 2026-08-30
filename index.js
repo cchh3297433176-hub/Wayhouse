@@ -6,6 +6,7 @@
 
 import { builtInGames, gamesListHTML, loadGameIntoIframe } from './src/games.js';
 import { normalizeBaseUrl, cleanText, fetchModelList, filterModels, createPreset } from './src/apiConfig.js';
+import { getScopeKey, getScopeConfig, addNpc, updateNpc, removeNpc, needsMemoryPrompt, setMemoryChoice } from './src/duoGame.js';
 
 const MODULE_NAME = 'wayhouse';
 const MENU_ID = 'wayhouse-menu-item';
@@ -30,6 +31,9 @@ const DEFAULT_SETTINGS = {
     presets: [], // [{id, name, baseUrl, apiKey, model}]
     activePresetId: null,
   },
+  duoGames: {
+    scopes: {}, // key: 存档标识 -> 每存档独立配置，见 src/duoGame.js
+  },
 };
 
 function getContext() {
@@ -52,6 +56,11 @@ function getSettings() {
   if (!Array.isArray(apiCfg.presets)) apiCfg.presets = [];
   if (apiCfg.activePresetId === undefined) apiCfg.activePresetId = null;
   extensionSettings[MODULE_NAME].apiConfig = apiCfg;
+
+  const duoCfg = extensionSettings[MODULE_NAME].duoGames || {};
+  if (!duoCfg.scopes || typeof duoCfg.scopes !== 'object') duoCfg.scopes = {};
+  extensionSettings[MODULE_NAME].duoGames = duoCfg;
+
   return extensionSettings[MODULE_NAME];
 }
 
@@ -119,9 +128,29 @@ function createModalsRoot() {
         </div>
       </div>
     </div>
+
+    <div class="wh-modal-overlay" id="wh-npc-modal-overlay" style="display:none">
+      <div class="wh-modal">
+        <div class="wh-modal-title" id="wh-npc-modal-title">添加 NPC</div>
+        <label class="wayhouse-row">
+          <span>名字</span>
+          <input type="text" id="wh-npc-name" maxlength="20">
+        </label>
+        <label class="wayhouse-row wh-modal-url-row">
+          <span>备注</span>
+        </label>
+        <input type="text" id="wh-npc-note" class="wh-modal-url-input" placeholder="性格/关系/其他备注，选填">
+        <div class="wh-modal-btns">
+          <button id="wh-npc-delete" class="wh-modal-delete-btn" style="display:none">删除</button>
+          <button id="wh-npc-cancel" class="wh-modal-cancel-btn">取消</button>
+          <button id="wh-npc-save" class="wh-modal-save-btn">保存</button>
+        </div>
+      </div>
+    </div>
   `;
   document.body.appendChild(root);
   bindGameModalUI(document);
+  bindNpcModalUI(document);
 }
 
 function createPanel() {
@@ -137,6 +166,7 @@ function createPanel() {
       <button class="wh-tab active" data-tab="home">主页</button>
       <button class="wh-tab" data-tab="games">小游戏</button>
       <button class="wh-tab" data-tab="api">接口</button>
+      <button class="wh-tab" data-tab="duo">双人游戏</button>
     </div>
     <div class="wayhouse-body">
       <div class="wh-section" data-section="home">
@@ -242,6 +272,48 @@ function createPanel() {
           <div id="wh-api-preset-list" class="wh-api-preset-list"></div>
         </div>
       </div>
+
+      <div class="wh-section" data-section="duo" style="display:none">
+        <p class="wh-games-tip">每个存档（角色卡+聊天记录组合）独立一份配置，切换存档会用各自的设置。</p>
+
+        <div class="wayhouse-settings-title">模型分配</div>
+        <div class="wayhouse-row">
+          <span>走棋/日常决策模型</span>
+          <select id="wh-duo-move-model" class="wh-duo-model-select"></select>
+        </div>
+        <div class="wayhouse-row">
+          <span>对话模型</span>
+          <select id="wh-duo-talk-model" class="wh-duo-model-select"></select>
+        </div>
+        <p class="wh-games-tip">建议走棋模型配便宜快的（比如 flash 档），对话模型配更聪明的——点"说话"才会用到对话模型，不会一直烧贵模型的钱。</p>
+
+        <div class="wayhouse-settings-title" style="margin-top:16px;">主角色</div>
+        <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+          <span>名字</span>
+          <input type="text" id="wh-duo-protagonist-name" class="wh-modal-url-input" placeholder="没有 char 时，给自己控制的角色起个名字">
+        </label>
+        <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+          <span>备注（性格/人设，可留空）</span>
+          <input type="text" id="wh-duo-protagonist-note" class="wh-modal-url-input" placeholder="选填">
+        </label>
+
+        <div class="wayhouse-settings-title" style="margin-top:16px;">NPC</div>
+        <div id="wh-duo-npc-list" class="wh-api-preset-list"></div>
+        <button class="wayhouse-upload-btn" id="wh-duo-add-npc" style="width:100%;margin-top:8px;">+ 添加 NPC</button>
+
+        <div class="wayhouse-settings-title" style="margin-top:16px;">记忆注入</div>
+        <label class="wayhouse-row">
+          <span>把游戏内容注入聊天记忆</span>
+          <input type="checkbox" id="wh-duo-mem-game-to-chat">
+        </label>
+        <label class="wayhouse-row">
+          <span>把聊天记忆同步给游戏</span>
+          <input type="checkbox" id="wh-duo-mem-chat-to-game">
+        </label>
+        <p class="wh-games-tip" id="wh-duo-mem-status"></p>
+
+        <p class="wh-games-tip" style="margin-top:16px;">游戏本体还没接入，等游戏文件准备好之后这里会出现真正的棋盘。当前这些设置会在游戏接入后直接生效。</p>
+      </div>
     </div>
 
     </div>
@@ -251,6 +323,7 @@ function createPanel() {
   bindTabsUI(panel);
   bindGamesUI(panel);
   bindApiSettingsUI(panel);
+  bindDuoGameUI(panel);
   document.body.appendChild(panel);
   createModalsRoot();
 }
@@ -505,6 +578,171 @@ function openModelPickerModal(root, models, onPick) {
 
   overlay.style.display = 'flex';
 }
+
+// ===== 双人游戏 Tab =====
+function presetOptionsHTML(presets, selectedId) {
+  let html = `<option value="" ${!selectedId ? 'selected' : ''}>跟随主设置</option>`;
+  html += presets
+    .map(p => `<option value="${p.id}" ${selectedId === p.id ? 'selected' : ''}>${escapeHtmlLocal(p.name)}</option>`)
+    .join('');
+  return html;
+}
+
+function renderNpcList(root, scopeConfig) {
+  const listEl = root.querySelector('#wh-duo-npc-list');
+  if (!scopeConfig.npcs.length) {
+    listEl.innerHTML = `<div class="wh-games-empty">还没有添加 NPC</div>`;
+    return;
+  }
+  listEl.innerHTML = scopeConfig.npcs
+    .map(
+      n => `
+      <div class="wh-preset-item">
+        <span class="wh-preset-name">${escapeHtmlLocal(n.name)}${n.note ? '　' + escapeHtmlLocal(n.note) : ''}</span>
+        <div class="wh-preset-actions">
+          <button class="wh-npc-edit" data-id="${n.id}">编辑</button>
+        </div>
+      </div>`,
+    )
+    .join('');
+}
+
+function updateMemoryStatusText(root, scopeConfig) {
+  const el = root.querySelector('#wh-duo-mem-status');
+  el.textContent = scopeConfig.memory.asked
+    ? '当前存档已设置过记忆选项，可随时在上面调整。'
+    : '当前存档还没设置过记忆选项，进入双人游戏时会询问一次；也可以现在直接勾选。';
+}
+
+function bindDuoGameUI(root) {
+  const cfg = getSettings();
+  const context = getContext();
+  const scopeKey = getScopeKey(context);
+  const scopeConfig = getScopeConfig(cfg.duoGames, scopeKey);
+
+  const moveSelect = root.querySelector('#wh-duo-move-model');
+  const talkSelect = root.querySelector('#wh-duo-talk-model');
+  moveSelect.innerHTML = presetOptionsHTML(cfg.apiConfig.presets, scopeConfig.moveModelPresetId);
+  talkSelect.innerHTML = presetOptionsHTML(cfg.apiConfig.presets, scopeConfig.talkModelPresetId);
+
+  moveSelect.addEventListener('change', () => {
+    scopeConfig.moveModelPresetId = moveSelect.value || null;
+    saveSettings();
+  });
+  talkSelect.addEventListener('change', () => {
+    scopeConfig.talkModelPresetId = talkSelect.value || null;
+    saveSettings();
+  });
+
+  const nameInput = root.querySelector('#wh-duo-protagonist-name');
+  const noteInput = root.querySelector('#wh-duo-protagonist-note');
+  nameInput.value = scopeConfig.protagonist.name;
+  noteInput.value = scopeConfig.protagonist.note;
+  [nameInput, noteInput].forEach(input => {
+    input.addEventListener('change', () => {
+      scopeConfig.protagonist.name = nameInput.value.trim();
+      scopeConfig.protagonist.note = noteInput.value.trim();
+      saveSettings();
+    });
+  });
+
+  renderNpcList(root, scopeConfig);
+  root.querySelector('#wh-duo-add-npc').addEventListener('click', () => {
+    openNpcModal(scopeConfig, 'add', null, () => {
+      renderNpcList(root, scopeConfig);
+    });
+  });
+  root.querySelector('#wh-duo-npc-list').addEventListener('click', e => {
+    const btn = e.target.closest('.wh-npc-edit');
+    if (!btn) return;
+    openNpcModal(scopeConfig, 'edit', btn.dataset.id, () => {
+      renderNpcList(root, scopeConfig);
+    });
+  });
+
+  const gameToChat = root.querySelector('#wh-duo-mem-game-to-chat');
+  const chatToGame = root.querySelector('#wh-duo-mem-chat-to-game');
+  gameToChat.checked = !!scopeConfig.memory.gameToMemory;
+  chatToGame.checked = !!scopeConfig.memory.memoryToGame;
+  updateMemoryStatusText(root, scopeConfig);
+
+  [gameToChat, chatToGame].forEach(box => {
+    box.addEventListener('change', () => {
+      setMemoryChoice(scopeConfig, gameToChat.checked, chatToGame.checked);
+      saveSettings();
+      updateMemoryStatusText(root, scopeConfig);
+    });
+  });
+}
+
+// ===== NPC 弹窗（跟游戏弹窗一样挂在 document.body 下） =====
+let npcModalScopeConfig = null;
+let npcModalMode = 'add';
+let npcModalEditId = null;
+let npcModalOnDone = null;
+
+function openNpcModal(scopeConfig, mode, npcId, onDone) {
+  npcModalScopeConfig = scopeConfig;
+  npcModalMode = mode;
+  npcModalEditId = npcId;
+  npcModalOnDone = onDone;
+
+  const overlay = document.querySelector('#wh-npc-modal-overlay');
+  const title = document.querySelector('#wh-npc-modal-title');
+  const nameInput = document.querySelector('#wh-npc-name');
+  const noteInput = document.querySelector('#wh-npc-note');
+  const deleteBtn = document.querySelector('#wh-npc-delete');
+
+  if (mode === 'edit') {
+    const npc = scopeConfig.npcs.find(n => n.id === npcId);
+    title.textContent = '编辑 NPC';
+    nameInput.value = npc?.name || '';
+    noteInput.value = npc?.note || '';
+    deleteBtn.style.display = '';
+  } else {
+    title.textContent = '添加 NPC';
+    nameInput.value = '';
+    noteInput.value = '';
+    deleteBtn.style.display = 'none';
+  }
+
+  overlay.style.display = 'flex';
+}
+
+function closeNpcModal() {
+  document.querySelector('#wh-npc-modal-overlay').style.display = 'none';
+}
+
+function bindNpcModalUI() {
+  document.querySelector('#wh-npc-cancel').addEventListener('click', closeNpcModal);
+  document.querySelector('#wh-npc-modal-overlay').addEventListener('click', e => {
+    if (e.target.id === 'wh-npc-modal-overlay') closeNpcModal();
+  });
+
+  document.querySelector('#wh-npc-save').addEventListener('click', () => {
+    const name = document.querySelector('#wh-npc-name').value.trim();
+    const note = document.querySelector('#wh-npc-note').value.trim();
+    if (!name) { alert('名字不能为空'); return; }
+
+    if (npcModalMode === 'edit') {
+      updateNpc(npcModalScopeConfig, npcModalEditId, name, note);
+    } else {
+      addNpc(npcModalScopeConfig, name, note);
+    }
+    saveSettings();
+    npcModalOnDone?.();
+    closeNpcModal();
+  });
+
+  document.querySelector('#wh-npc-delete').addEventListener('click', () => {
+    if (!confirm('确定删除这个 NPC？')) return;
+    removeNpc(npcModalScopeConfig, npcModalEditId);
+    saveSettings();
+    npcModalOnDone?.();
+    closeNpcModal();
+  });
+}
+
 let modalMode = 'add'; // 'add' | 'edit'
 let modalEditIndex = null;
 let modalIconDataUrl = ''; // 用户上传的本地图片(dataURL)，优先于 emoji
