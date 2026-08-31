@@ -26,6 +26,8 @@ function createDefaultScopeConfig() {
     protagonist: { name: '', note: '' },
     npcs: [], // [{id, name, note}]
     gameUrl: '', // 这个存档自己加载的双人游戏链接
+    gameName: '',
+    gameIcon: '🎲',
     memory: {
       gameToMemory: null, // null = 还没问过；true/false = 用户选过的答案
       memoryToGame: null,
@@ -44,6 +46,8 @@ export function getScopeConfig(duoSettings, scopeKey) {
   if (!Array.isArray(cfg.npcs)) cfg.npcs = [];
   if (!cfg.memory) cfg.memory = { gameToMemory: null, memoryToGame: null, asked: false };
   if (cfg.gameUrl === undefined) cfg.gameUrl = '';
+  if (cfg.gameName === undefined) cfg.gameName = '';
+  if (cfg.gameIcon === undefined) cfg.gameIcon = '🎲';
   return cfg;
 }
 
