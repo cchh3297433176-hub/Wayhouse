@@ -9,7 +9,7 @@ import { normalizeBaseUrl, cleanText, fetchModelList, filterModels, createPreset
 import { getScopeKey, getScopeConfig, addNpc, updateNpc, removeNpc, needsMemoryPrompt, setMemoryChoice, decide, buildNpcExtractionPrompt, parseNpcExtractionResult } from './src/duoGame.js';
 
 const MODULE_NAME = 'wayhouse';
-const EXT_VERSION = '0.7.0'; // 面板标题旁边会显示，方便确认更新是否生效
+const EXT_VERSION = '0.7.1'; // 面板标题旁边会显示，方便确认更新是否生效
 const MENU_ID = 'wayhouse-menu-item';
 const MENU_SELECTORS = [
   '#extensionsMenu',
@@ -324,11 +324,27 @@ function createPanel() {
         </div>
 
         <div id="wh-duo-game-area">
-          <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
-            <span>游戏链接</span>
-            <input type="text" id="wh-duo-game-url" class="wh-modal-url-input" placeholder="https://.../game.html">
-          </label>
-          <button class="wayhouse-upload-btn" id="wh-duo-load-game" style="width:100%;">加载游戏</button>
+          <div id="wh-duo-game-badge" class="wh-duo-game-badge" style="display:none">
+            <span id="wh-duo-game-badge-icon"></span>
+            <span id="wh-duo-game-badge-name"></span>
+            <button id="wh-duo-game-edit" class="wh-duo-game-edit-btn">编辑</button>
+          </div>
+
+          <div id="wh-duo-game-form">
+            <div class="wayhouse-row">
+              <span>名称</span>
+              <input type="text" id="wh-duo-game-name" class="wh-modal-url-input" style="max-width:150px;" placeholder="给游戏起个名字">
+            </div>
+            <div class="wayhouse-row">
+              <span>图标（emoji）</span>
+              <input type="text" id="wh-duo-game-icon" class="wh-modal-url-input" style="max-width:80px;" placeholder="🎲" maxlength="4">
+            </div>
+            <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+              <span>游戏链接</span>
+              <input type="text" id="wh-duo-game-url" class="wh-modal-url-input" placeholder="https://.../game.html">
+            </label>
+            <button class="wayhouse-upload-btn" id="wh-duo-load-game" style="width:100%;">加载游戏</button>
+          </div>
 
           <div class="wh-game-frame-wrap" id="wh-duo-game-frame-wrap" style="display:none">
             <iframe
@@ -340,7 +356,7 @@ function createPanel() {
               loading="lazy"
               referrerpolicy="no-referrer-when-downgrade"></iframe>
           </div>
-          <p class="wh-games-tip">当前先能手动加载/查看游戏。AI 自动走棋、reroll 兜底这些还没接，先能显示出来验证链接和布局没问题。</p>
+          <p class="wh-games-tip">当前先能手动加载/查看游戏，会记住这个存档配的名称/图标/链接。AI 自动走棋、reroll 兜底这些还没接，先能显示出来验证链接和布局没问题。</p>
         </div>
 
         <div id="wh-duo-settings-body" style="display:none">
@@ -742,20 +758,51 @@ function bindDuoGameUI(root) {
     settingsBody.style.display = settingsBody.style.display === 'none' ? 'block' : 'none';
   });
 
-  // 游戏链接加载（跟"小游戏"Tab 分开，独立存这个存档自己的游戏地址）
+  // 游戏链接加载（跟"小游戏"Tab 分开，独立存这个存档自己的游戏名称/图标/链接）
   const gameUrlInput = root.querySelector('#wh-duo-game-url');
+  const gameNameInput = root.querySelector('#wh-duo-game-name');
+  const gameIconInput = root.querySelector('#wh-duo-game-icon');
   const gameFrameWrap = root.querySelector('#wh-duo-game-frame-wrap');
   const gameIframe = root.querySelector('#wh-duo-game-iframe');
+  const gameForm = root.querySelector('#wh-duo-game-form');
+  const gameBadge = root.querySelector('#wh-duo-game-badge');
+  const gameBadgeIcon = root.querySelector('#wh-duo-game-badge-icon');
+  const gameBadgeName = root.querySelector('#wh-duo-game-badge-name');
+
   gameUrlInput.value = scopeConfig.gameUrl || '';
+  gameNameInput.value = scopeConfig.gameName || '';
+  gameIconInput.value = scopeConfig.gameIcon || '';
+
+  function showLoadedGame() {
+    gameBadgeIcon.textContent = scopeConfig.gameIcon || '🎲';
+    gameBadgeName.textContent = scopeConfig.gameName || '未命名游戏';
+    gameBadge.style.display = 'flex';
+    gameForm.style.display = 'none';
+    gameFrameWrap.style.display = 'flex';
+    loadGameIntoIframe(gameIframe, scopeConfig.gameUrl, scopeConfig.gameName || '双人游戏');
+  }
 
   root.querySelector('#wh-duo-load-game').addEventListener('click', () => {
     const url = gameUrlInput.value.trim();
     if (!url) { alert('请先填游戏链接'); return; }
     scopeConfig.gameUrl = url;
+    scopeConfig.gameName = gameNameInput.value.trim();
+    scopeConfig.gameIcon = gameIconInput.value.trim() || '🎲';
     saveSettings();
-    gameFrameWrap.style.display = 'flex';
-    loadGameIntoIframe(gameIframe, url, '双人游戏');
+    showLoadedGame();
   });
+
+  root.querySelector('#wh-duo-game-edit').addEventListener('click', () => {
+    gameBadge.style.display = 'none';
+    gameForm.style.display = 'block';
+    gameFrameWrap.style.display = 'none';
+    gameIframe.srcdoc = '';
+  });
+
+  // 这个存档之前存过游戏，直接自动加载出来，不用每次都重新填
+  if (scopeConfig.gameUrl) {
+    showLoadedGame();
+  }
 
   // AI 读取角色卡/世界书/user 人设，生成 NPC 列表
   const aiNpcStatus = root.querySelector('#wh-duo-ai-npc-status');
