@@ -595,3 +595,56 @@
 .wh-collapse-body {
   padding: 4px 0 10px;
 }
+
+/* 双人游戏 Tab 头部（齿轮折叠设置） */
+.wh-duo-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.wh-gear-btn {
+  border: 1px solid #e2d2ba;
+  background: #fff;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.wh-duo-npc-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.wh-duo-npc-btns button {
+  flex: 1;
+}
+
+/* 悬浮球头像裁剪弹窗 */
+.wh-crop-box {
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 14px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 2px solid #e2d2ba;
+  background: #eee;
+  touch-action: none;
+  cursor: grab;
+}
+
+.wh-crop-box:active {
+  cursor: grabbing;
+}
+
+.wh-crop-box img {
+  position: absolute;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}

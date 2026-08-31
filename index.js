@@ -6,9 +6,10 @@
 
 import { builtInGames, gamesListHTML, loadGameIntoIframe } from './src/games.js';
 import { normalizeBaseUrl, cleanText, fetchModelList, filterModels, createPreset } from './src/apiConfig.js';
-import { getScopeKey, getScopeConfig, addNpc, updateNpc, removeNpc, needsMemoryPrompt, setMemoryChoice } from './src/duoGame.js';
+import { getScopeKey, getScopeConfig, addNpc, updateNpc, removeNpc, needsMemoryPrompt, setMemoryChoice, decide, buildNpcExtractionPrompt, parseNpcExtractionResult } from './src/duoGame.js';
 
 const MODULE_NAME = 'wayhouse';
+const EXT_VERSION = '0.7.0'; // 面板标题旁边会显示，方便确认更新是否生效
 const MENU_ID = 'wayhouse-menu-item';
 const MENU_SELECTORS = [
   '#extensionsMenu',
@@ -65,7 +66,16 @@ function getSettings() {
 }
 
 function saveSettings() {
-  getContext().saveSettingsDebounced();
+  const context = getContext();
+  // 优先用立即保存，避免"防抖"来不及落盘——改完设置马上重启酒馆的话，
+  // 防抖版本可能还没真正写盘，改动就丢了（这大概率是之前悬浮球设置
+  // 重启后失效的真正原因）。不同酒馆版本方法名可能不完全一样，
+  // 取不到立即保存的方法就退回防抖版本，仍然需要真机确认一下。
+  if (typeof context.saveSettings === 'function') {
+    context.saveSettings();
+  } else {
+    context.saveSettingsDebounced();
+  }
 }
 
 let panel = null;
@@ -147,10 +157,29 @@ function createModalsRoot() {
         </div>
       </div>
     </div>
+
+    <div class="wh-modal-overlay" id="wh-crop-modal-overlay" style="display:none">
+      <div class="wh-modal">
+        <div class="wh-modal-title">调整头像</div>
+        <div class="wh-crop-box" id="wh-crop-box">
+          <img id="wh-crop-img" draggable="false" alt="">
+        </div>
+        <div class="wayhouse-row">
+          <span>缩放</span>
+          <input type="range" id="wh-crop-zoom" min="100" max="300" value="100">
+        </div>
+        <p class="wh-games-tip">拖动图片调整位置，滑块调整缩放范围。</p>
+        <div class="wh-modal-btns">
+          <button id="wh-crop-cancel" class="wh-modal-cancel-btn">取消</button>
+          <button id="wh-crop-confirm" class="wh-modal-save-btn">确定</button>
+        </div>
+      </div>
+    </div>
   `;
   document.body.appendChild(root);
   bindGameModalUI(document);
   bindNpcModalUI(document);
+  bindBallCropUI(document);
 }
 
 function createPanel() {
@@ -159,7 +188,7 @@ function createPanel() {
   panel.id = 'wayhouse-panel';
   panel.innerHTML = `
     <div class="wayhouse-header">
-      <span>伴窝 · Wayhouse</span>
+      <span>伴窝 · Wayhouse <small class="wh-version-tag">v${EXT_VERSION}</small></span>
       <button class="wayhouse-close" title="关闭">×</button>
     </div>
     <div class="wayhouse-tabs">
@@ -289,34 +318,63 @@ function createPanel() {
       </div>
 
       <div class="wh-section" data-section="duo" style="display:none">
-        <p class="wh-games-tip">每个存档（角色卡+聊天记录组合）独立一份配置，切换存档会用各自的设置。走棋/对话用的模型请去"接口"Tab 里的"双人游戏模型分配"设置。</p>
+        <div class="wh-duo-header-row">
+          <span class="wayhouse-settings-title" style="margin:0;">双人游戏</span>
+          <button class="wh-gear-btn" id="wh-duo-settings-toggle" title="设置">⚙️</button>
+        </div>
 
-        <div class="wayhouse-settings-title">主角色</div>
-        <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
-          <span>名字</span>
-          <input type="text" id="wh-duo-protagonist-name" class="wh-modal-url-input" placeholder="没有 char 时，给自己控制的角色起个名字">
-        </label>
-        <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
-          <span>备注（性格/人设，可留空）</span>
-          <input type="text" id="wh-duo-protagonist-note" class="wh-modal-url-input" placeholder="选填">
-        </label>
+        <div id="wh-duo-game-area">
+          <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <span>游戏链接</span>
+            <input type="text" id="wh-duo-game-url" class="wh-modal-url-input" placeholder="https://.../game.html">
+          </label>
+          <button class="wayhouse-upload-btn" id="wh-duo-load-game" style="width:100%;">加载游戏</button>
 
-        <div class="wayhouse-settings-title" style="margin-top:16px;">NPC</div>
-        <div id="wh-duo-npc-list" class="wh-api-preset-list"></div>
-        <button class="wayhouse-upload-btn" id="wh-duo-add-npc" style="width:100%;margin-top:8px;">+ 添加 NPC</button>
+          <div class="wh-game-frame-wrap" id="wh-duo-game-frame-wrap" style="display:none">
+            <iframe
+              class="wh-game-iframe"
+              id="wh-duo-game-iframe"
+              frameborder="0"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-orientation-lock allow-popups allow-modals allow-downloads"
+              allow="accelerometer; gyroscope; gamepad; fullscreen; autoplay"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
+          <p class="wh-games-tip">当前先能手动加载/查看游戏。AI 自动走棋、reroll 兜底这些还没接，先能显示出来验证链接和布局没问题。</p>
+        </div>
 
-        <div class="wayhouse-settings-title" style="margin-top:16px;">记忆注入</div>
-        <label class="wayhouse-row">
-          <span>把游戏内容注入聊天记忆</span>
-          <input type="checkbox" id="wh-duo-mem-game-to-chat">
-        </label>
-        <label class="wayhouse-row">
-          <span>把聊天记忆同步给游戏</span>
-          <input type="checkbox" id="wh-duo-mem-chat-to-game">
-        </label>
-        <p class="wh-games-tip" id="wh-duo-mem-status"></p>
+        <div id="wh-duo-settings-body" style="display:none">
+          <p class="wh-games-tip">每个存档（角色卡+聊天记录组合）独立一份配置，切换存档会用各自的设置。走棋/对话用的模型请去"接口"Tab 里的"双人游戏模型分配"设置。</p>
 
-        <p class="wh-games-tip" style="margin-top:16px;">游戏本体还没接入，等游戏文件准备好之后这里会出现真正的棋盘（跟"小游戏"Tab 里的休闲游戏是分开的，不会混在一起）。当前这些设置会在游戏接入后直接生效。</p>
+          <div class="wayhouse-settings-title">主角色</div>
+          <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <span>名字</span>
+            <input type="text" id="wh-duo-protagonist-name" class="wh-modal-url-input" placeholder="没有 char 时，给自己控制的角色起个名字">
+          </label>
+          <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <span>备注（性格/人设，可留空）</span>
+            <input type="text" id="wh-duo-protagonist-note" class="wh-modal-url-input" placeholder="选填">
+          </label>
+
+          <div class="wayhouse-settings-title" style="margin-top:16px;">NPC</div>
+          <div id="wh-duo-npc-list" class="wh-api-preset-list"></div>
+          <div class="wh-duo-npc-btns">
+            <button class="wayhouse-upload-btn" id="wh-duo-add-npc">+ 手动添加</button>
+            <button class="wayhouse-upload-btn" id="wh-duo-ai-npc">✨ AI 读取生成</button>
+          </div>
+          <p class="wh-games-tip" id="wh-duo-ai-npc-status"></p>
+
+          <div class="wayhouse-settings-title" style="margin-top:16px;">记忆注入</div>
+          <label class="wayhouse-row">
+            <span>把游戏内容注入聊天记忆</span>
+            <input type="checkbox" id="wh-duo-mem-game-to-chat">
+          </label>
+          <label class="wayhouse-row">
+            <span>把聊天记忆同步给游戏</span>
+            <input type="checkbox" id="wh-duo-mem-chat-to-game">
+          </label>
+          <p class="wh-games-tip" id="wh-duo-mem-status"></p>
+        </div>
       </div>
     </div>
 
@@ -677,6 +735,53 @@ function bindDuoGameUI(root) {
       updateMemoryStatusText(root, scopeConfig);
     });
   });
+
+  // 齿轮：折叠/展开设置区，默认收起，游戏区始终在上面
+  const settingsBody = root.querySelector('#wh-duo-settings-body');
+  root.querySelector('#wh-duo-settings-toggle').addEventListener('click', () => {
+    settingsBody.style.display = settingsBody.style.display === 'none' ? 'block' : 'none';
+  });
+
+  // 游戏链接加载（跟"小游戏"Tab 分开，独立存这个存档自己的游戏地址）
+  const gameUrlInput = root.querySelector('#wh-duo-game-url');
+  const gameFrameWrap = root.querySelector('#wh-duo-game-frame-wrap');
+  const gameIframe = root.querySelector('#wh-duo-game-iframe');
+  gameUrlInput.value = scopeConfig.gameUrl || '';
+
+  root.querySelector('#wh-duo-load-game').addEventListener('click', () => {
+    const url = gameUrlInput.value.trim();
+    if (!url) { alert('请先填游戏链接'); return; }
+    scopeConfig.gameUrl = url;
+    saveSettings();
+    gameFrameWrap.style.display = 'flex';
+    loadGameIntoIframe(gameIframe, url, '双人游戏');
+  });
+
+  // AI 读取角色卡/世界书/user 人设，生成 NPC 列表
+  const aiNpcStatus = root.querySelector('#wh-duo-ai-npc-status');
+  root.querySelector('#wh-duo-ai-npc').addEventListener('click', async () => {
+    aiNpcStatus.textContent = '正在读取角色卡/世界书/人设并生成……';
+    const prompt = buildNpcExtractionPrompt(context);
+    const result = await decide('move', scopeConfig, cfg.apiConfig, prompt, context);
+    if (!result.ok) {
+      aiNpcStatus.textContent = '生成失败：' + result.error;
+      return;
+    }
+    const parsed = parseNpcExtractionResult(result.text);
+    if (!parsed.length) {
+      aiNpcStatus.textContent = '没解析出有效的 NPC，返回内容格式可能不对，可以手动添加。';
+      return;
+    }
+    let added = 0;
+    for (const item of parsed) {
+      if (scopeConfig.npcs.some(n => n.name === item.name)) continue; // 已有同名的跳过，不重复加
+      addNpc(scopeConfig, item.name, item.note);
+      added++;
+    }
+    saveSettings();
+    renderNpcList(root, scopeConfig);
+    aiNpcStatus.textContent = `生成完成，识别到 ${parsed.length} 个角色，新增了 ${added} 个（重名的自动跳过）。`;
+  });
 }
 
 // ===== NPC 弹窗（跟游戏弹窗一样挂在 document.body 下） =====
@@ -939,7 +1044,7 @@ function bindSettingsUI(root) {
   root.querySelector('#wh-float-image').addEventListener('change', e => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    resizeImageToDataURL(file, 256).then(dataUrl => {
+    openBallCropModal(file, dataUrl => {
       cfg.floatingBallImage = dataUrl;
       saveSettings();
       syncFloatBall();
@@ -979,6 +1084,138 @@ function resizeImageToDataURL(file, maxSize) {
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+// ===== 悬浮球头像裁剪/缩放弹窗 =====
+const BALL_CROP_BOX_SIZE = 220; // 跟 CSS 里 .wh-crop-box 的宽高一致
+const BALL_CROP_OUTPUT_SIZE = 256;
+
+let cropState = null; // { naturalW, naturalH, baseScale, zoom, posX, posY }
+let cropOnConfirm = null;
+
+function openBallCropModal(file, onConfirm) {
+  cropOnConfirm = onConfirm;
+  const overlay = document.querySelector('#wh-crop-modal-overlay');
+  const imgEl = document.querySelector('#wh-crop-img');
+  const zoomInput = document.querySelector('#wh-crop-zoom');
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const probe = new Image();
+    probe.onload = () => {
+      const baseScale = BALL_CROP_BOX_SIZE / Math.min(probe.naturalWidth, probe.naturalHeight);
+      cropState = {
+        naturalW: probe.naturalWidth,
+        naturalH: probe.naturalHeight,
+        baseScale,
+        zoom: 1,
+        posX: 0,
+        posY: 0,
+      };
+      imgEl.src = reader.result;
+      zoomInput.value = 100;
+      centerCropImage();
+      renderCropImage();
+      overlay.style.display = 'flex';
+    };
+    probe.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function centerCropImage() {
+  if (!cropState) return;
+  const effScale = cropState.baseScale * cropState.zoom;
+  const dispW = cropState.naturalW * effScale;
+  const dispH = cropState.naturalH * effScale;
+  cropState.posX = (BALL_CROP_BOX_SIZE - dispW) / 2;
+  cropState.posY = (BALL_CROP_BOX_SIZE - dispH) / 2;
+}
+
+function clampCropPosition() {
+  if (!cropState) return;
+  const effScale = cropState.baseScale * cropState.zoom;
+  const dispW = cropState.naturalW * effScale;
+  const dispH = cropState.naturalH * effScale;
+  const minX = Math.min(0, BALL_CROP_BOX_SIZE - dispW);
+  const minY = Math.min(0, BALL_CROP_BOX_SIZE - dispH);
+  cropState.posX = Math.max(minX, Math.min(0, cropState.posX));
+  cropState.posY = Math.max(minY, Math.min(0, cropState.posY));
+}
+
+function renderCropImage() {
+  if (!cropState) return;
+  const imgEl = document.querySelector('#wh-crop-img');
+  const effScale = cropState.baseScale * cropState.zoom;
+  const dispW = cropState.naturalW * effScale;
+  const dispH = cropState.naturalH * effScale;
+  imgEl.style.width = dispW + 'px';
+  imgEl.style.height = dispH + 'px';
+  imgEl.style.left = cropState.posX + 'px';
+  imgEl.style.top = cropState.posY + 'px';
+}
+
+function bindBallCropUI(root) {
+  const overlay = root.querySelector('#wh-crop-modal-overlay');
+  const box = root.querySelector('#wh-crop-box');
+  const zoomInput = root.querySelector('#wh-crop-zoom');
+
+  zoomInput.addEventListener('input', () => {
+    if (!cropState) return;
+    cropState.zoom = Number(zoomInput.value) / 100;
+    clampCropPosition();
+    renderCropImage();
+  });
+
+  let dragging = false;
+  let startX = 0, startY = 0, originX = 0, originY = 0;
+
+  box.addEventListener('pointerdown', e => {
+    if (!cropState) return;
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    originX = cropState.posX;
+    originY = cropState.posY;
+    try { box.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  box.addEventListener('pointermove', e => {
+    if (!dragging || !cropState) return;
+    cropState.posX = originX + (e.clientX - startX);
+    cropState.posY = originY + (e.clientY - startY);
+    clampCropPosition();
+    renderCropImage();
+  });
+  const stopDrag = () => { dragging = false; };
+  box.addEventListener('pointerup', stopDrag);
+  box.addEventListener('pointercancel', stopDrag);
+
+  root.querySelector('#wh-crop-cancel').addEventListener('click', () => {
+    overlay.style.display = 'none';
+    cropState = null;
+    cropOnConfirm = null;
+  });
+
+  root.querySelector('#wh-crop-confirm').addEventListener('click', () => {
+    if (!cropState) return;
+    const effScale = cropState.baseScale * cropState.zoom;
+    const sourceX = -cropState.posX / effScale;
+    const sourceY = -cropState.posY / effScale;
+    const sourceSize = BALL_CROP_BOX_SIZE / effScale;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = BALL_CROP_OUTPUT_SIZE;
+    canvas.height = BALL_CROP_OUTPUT_SIZE;
+    const ctx = canvas.getContext('2d');
+    const imgEl = root.querySelector('#wh-crop-img');
+    ctx.drawImage(imgEl, sourceX, sourceY, sourceSize, sourceSize, 0, 0, BALL_CROP_OUTPUT_SIZE, BALL_CROP_OUTPUT_SIZE);
+    const dataUrl = canvas.toDataURL('image/png');
+
+    overlay.style.display = 'none';
+    cropOnConfirm?.(dataUrl);
+    cropState = null;
+    cropOnConfirm = null;
   });
 }
 
