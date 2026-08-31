@@ -218,6 +218,13 @@
   margin-top: 8px;
 }
 
+#wh-duo-game-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .wh-game-frame-header {
   display: flex;
   align-items: center;

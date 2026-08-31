@@ -9,7 +9,7 @@ import { normalizeBaseUrl, cleanText, fetchModelList, filterModels, createPreset
 import { getScopeKey, getScopeConfig, addNpc, updateNpc, removeNpc, needsMemoryPrompt, setMemoryChoice, decide, buildNpcExtractionPrompt, parseNpcExtractionResult } from './src/duoGame.js';
 
 const MODULE_NAME = 'wayhouse';
-const EXT_VERSION = '0.7.1'; // 面板标题旁边会显示，方便确认更新是否生效
+const EXT_VERSION = '0.7.2'; // 面板标题旁边会显示，方便确认更新是否生效
 const MENU_ID = 'wayhouse-menu-item';
 const MENU_SELECTORS = [
   '#extensionsMenu',
@@ -347,6 +347,13 @@ function createPanel() {
           </div>
 
           <div class="wh-game-frame-wrap" id="wh-duo-game-frame-wrap" style="display:none">
+            <div class="wh-gen-notify" id="wh-duo-gen-notify" style="display:none">
+              <span>楼层生成完成啦，要去看看吗？</span>
+              <div class="wh-gen-notify-btns">
+                <button id="wh-duo-gen-notify-view">去看酒馆</button>
+                <button id="wh-duo-gen-notify-dismiss">继续玩</button>
+              </div>
+            </div>
             <iframe
               class="wh-game-iframe"
               id="wh-duo-game-iframe"
@@ -799,6 +806,12 @@ function bindDuoGameUI(root) {
     gameIframe.srcdoc = '';
   });
 
+  root.querySelector('#wh-duo-gen-notify-view').addEventListener('click', () => {
+    hideGenNotify();
+    hidePanel();
+  });
+  root.querySelector('#wh-duo-gen-notify-dismiss').addEventListener('click', hideGenNotify);
+
   // 这个存档之前存过游戏，直接自动加载出来，不用每次都重新填
   if (scopeConfig.gameUrl) {
     showLoadedGame();
@@ -1016,16 +1029,29 @@ function bindGameModalUI(root) {
   });
 }
 
+// 两处游戏区（休闲小游戏 / 双人游戏）都要能弹这个提醒条，统一处理
+const GAME_NOTIFY_TARGETS = [
+  { frameWrapId: '#wh-game-frame-wrap', notifyId: '#wh-gen-notify' },
+  { frameWrapId: '#wh-duo-game-frame-wrap', notifyId: '#wh-duo-gen-notify' },
+];
+
 function showGenNotify() {
   if (!panel) return;
-  const bar = panel.querySelector('#wh-gen-notify');
-  if (bar) bar.style.display = 'flex';
+  for (const t of GAME_NOTIFY_TARGETS) {
+    const frameWrap = panel.querySelector(t.frameWrapId);
+    if (frameWrap && frameWrap.style.display !== 'none') {
+      const bar = panel.querySelector(t.notifyId);
+      if (bar) bar.style.display = 'flex';
+    }
+  }
 }
 
 function hideGenNotify() {
   if (!panel) return;
-  const bar = panel.querySelector('#wh-gen-notify');
-  if (bar) bar.style.display = 'none';
+  for (const t of GAME_NOTIFY_TARGETS) {
+    const bar = panel.querySelector(t.notifyId);
+    if (bar) bar.style.display = 'none';
+  }
 }
 
 // ===== 楼层生成完成提醒 =====
@@ -1045,8 +1071,11 @@ function bindGenerationNotify() {
 function handleMessageReceived(messageId) {
   try {
     if (!isVisible || !panel) return; // 面板没开着不用提醒
-    const frameWrap = panel.querySelector('#wh-game-frame-wrap');
-    if (!frameWrap || frameWrap.style.display === 'none') return; // 只在正玩游戏时提醒
+    const anyGameOpen = GAME_NOTIFY_TARGETS.some(t => {
+      const fw = panel.querySelector(t.frameWrapId);
+      return fw && fw.style.display !== 'none';
+    });
+    if (!anyGameOpen) return; // 只在正玩游戏时提醒（不管是休闲小游戏还是双人游戏）
 
     const context = getContext();
     const chat = context.chat;
