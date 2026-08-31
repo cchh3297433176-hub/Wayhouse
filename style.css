@@ -562,3 +562,36 @@
   background: #fff;
   max-width: 160px;
 }
+
+.wh-collapse {
+  border: 1px solid #e2d2ba;
+  border-radius: 8px;
+  background: #fff;
+  padding: 2px 10px;
+}
+
+.wh-collapse summary {
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b5443;
+  cursor: pointer;
+  list-style: none;
+}
+
+.wh-collapse summary::-webkit-details-marker {
+  display: none;
+}
+
+.wh-collapse summary::before {
+  content: '▸ ';
+  color: #a08b76;
+}
+
+.wh-collapse[open] summary::before {
+  content: '▾ ';
+}
+
+.wh-collapse-body {
+  padding: 4px 0 10px;
+}

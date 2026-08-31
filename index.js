@@ -270,24 +270,28 @@ function createPanel() {
 
           <div class="wayhouse-settings-title" style="margin-top:16px;">已保存预设</div>
           <div id="wh-api-preset-list" class="wh-api-preset-list"></div>
+
+          <details class="wh-collapse" style="margin-top:16px;">
+            <summary>双人游戏模型分配</summary>
+            <div class="wh-collapse-body">
+              <div class="wayhouse-row">
+                <span>走棋/日常决策模型</span>
+                <select id="wh-duo-move-model" class="wh-duo-model-select"></select>
+              </div>
+              <div class="wayhouse-row">
+                <span>对话模型</span>
+                <select id="wh-duo-talk-model" class="wh-duo-model-select"></select>
+              </div>
+              <p class="wh-games-tip">建议走棋模型配便宜快的（比如 flash 档），对话模型配更聪明的——点"说话"才会用到对话模型，不会一直烧贵模型的钱。这里的选择跟随当前存档（角色卡+聊天记录）。</p>
+            </div>
+          </details>
         </div>
       </div>
 
       <div class="wh-section" data-section="duo" style="display:none">
-        <p class="wh-games-tip">每个存档（角色卡+聊天记录组合）独立一份配置，切换存档会用各自的设置。</p>
+        <p class="wh-games-tip">每个存档（角色卡+聊天记录组合）独立一份配置，切换存档会用各自的设置。走棋/对话用的模型请去"接口"Tab 里的"双人游戏模型分配"设置。</p>
 
-        <div class="wayhouse-settings-title">模型分配</div>
-        <div class="wayhouse-row">
-          <span>走棋/日常决策模型</span>
-          <select id="wh-duo-move-model" class="wh-duo-model-select"></select>
-        </div>
-        <div class="wayhouse-row">
-          <span>对话模型</span>
-          <select id="wh-duo-talk-model" class="wh-duo-model-select"></select>
-        </div>
-        <p class="wh-games-tip">建议走棋模型配便宜快的（比如 flash 档），对话模型配更聪明的——点"说话"才会用到对话模型，不会一直烧贵模型的钱。</p>
-
-        <div class="wayhouse-settings-title" style="margin-top:16px;">主角色</div>
+        <div class="wayhouse-settings-title">主角色</div>
         <label class="wayhouse-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
           <span>名字</span>
           <input type="text" id="wh-duo-protagonist-name" class="wh-modal-url-input" placeholder="没有 char 时，给自己控制的角色起个名字">
@@ -312,7 +316,7 @@ function createPanel() {
         </label>
         <p class="wh-games-tip" id="wh-duo-mem-status"></p>
 
-        <p class="wh-games-tip" style="margin-top:16px;">游戏本体还没接入，等游戏文件准备好之后这里会出现真正的棋盘。当前这些设置会在游戏接入后直接生效。</p>
+        <p class="wh-games-tip" style="margin-top:16px;">游戏本体还没接入，等游戏文件准备好之后这里会出现真正的棋盘（跟"小游戏"Tab 里的休闲游戏是分开的，不会混在一起）。当前这些设置会在游戏接入后直接生效。</p>
       </div>
     </div>
 
