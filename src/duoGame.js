@@ -25,6 +25,7 @@ function createDefaultScopeConfig() {
     talkModelPresetId: null,
     protagonist: { name: '', note: '' },
     npcs: [], // [{id, name, note}]
+    gameUrl: '', // 这个存档自己加载的双人游戏链接
     memory: {
       gameToMemory: null, // null = 还没问过；true/false = 用户选过的答案
       memoryToGame: null,
@@ -42,6 +43,7 @@ export function getScopeConfig(duoSettings, scopeKey) {
   if (!cfg.protagonist) cfg.protagonist = { name: '', note: '' };
   if (!Array.isArray(cfg.npcs)) cfg.npcs = [];
   if (!cfg.memory) cfg.memory = { gameToMemory: null, memoryToGame: null, asked: false };
+  if (cfg.gameUrl === undefined) cfg.gameUrl = '';
   return cfg;
 }
 
@@ -101,4 +103,76 @@ export function setMemoryChoice(scopeConfig, gameToMemory, memoryToGame) {
   scopeConfig.memory.gameToMemory = gameToMemory;
   scopeConfig.memory.memoryToGame = memoryToGame;
   scopeConfig.memory.asked = true;
+}
+
+// ===== AI 读取角色卡/世界书/user 人设，生成 NPC =====
+// 注意：这里读取角色卡/世界书/人设用的字段名是按酒馆扩展常见的 context 结构猜的，
+// 不同酒馆版本/不同扩展 API 细节可能对不上，需要真机验证实际读到的内容对不对。
+// 单个字段取不到就跳过，不会导致整个功能报错崩溃。
+function safeGet(fn, fallback) {
+  try {
+    const v = fn();
+    return v === undefined || v === null ? fallback : v;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+export function buildNpcExtractionPrompt(context) {
+  const charName = safeGet(() => context.name2 || context.characters?.[context.characterId]?.name, '');
+  const charDesc = safeGet(() => context.characters?.[context.characterId]?.description, '');
+  const charPersonality = safeGet(() => context.characters?.[context.characterId]?.personality, '');
+  const charScenario = safeGet(() => context.characters?.[context.characterId]?.scenario, '');
+
+  const userName = safeGet(() => context.name1, '');
+  const userPersona = safeGet(() => context.power_user?.persona_description, '');
+
+  // 世界书：尝试拿已启用条目的内容，取不到就跳过这部分，不影响其他内容照常生成
+  let worldInfoText = '';
+  try {
+    const entries = context.world_info?.entries || context.worldInfoData?.entries;
+    if (Array.isArray(entries)) {
+      worldInfoText = entries
+        .filter(e => e && e.disable !== true)
+        .map(e => `- ${e.comment || e.key || ''}: ${e.content || ''}`)
+        .join('\n')
+        .slice(0, 4000); // 避免 prompt 太长，先粗暴截断
+    }
+  } catch (e) {
+    // 取不到就算了
+  }
+
+  return `请从以下资料中识别出所有出现过的具体人物角色（不包括主角色${charName ? `「${charName}」` : ''}和玩家本人${userName ? `「${userName}」` : ''}），给每个人整理一句话人设/关系备注。
+
+【角色卡资料】
+描述：${charDesc || '（无）'}
+性格：${charPersonality || '（无）'}
+场景：${charScenario || '（无）'}
+
+【玩家人设】
+${userName ? `名字：${userName}` : ''}
+${userPersona || '（无）'}
+
+【世界书（已启用条目）】
+${worldInfoText || '（无，或未能读取到世界书内容）'}
+
+请只输出 JSON 数组，不要有任何其他文字说明，格式：
+[{"name":"角色名","note":"一句话人设/关系备注"}]
+如果没有识别到任何角色，输出空数组 []。`;
+}
+
+export function parseNpcExtractionResult(text) {
+  if (!text) return [];
+  // 有些模型会在 JSON 前后夹带 ```json 代码块或者说明文字，先尽量抠出中括号包裹的部分
+  const match = text.match(/\[[\s\S]*\]/);
+  const jsonStr = match ? match[0] : text;
+  try {
+    const arr = JSON.parse(jsonStr);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(item => item && typeof item.name === 'string' && item.name.trim())
+      .map(item => ({ name: item.name.trim(), note: typeof item.note === 'string' ? item.note.trim() : '' }));
+  } catch (e) {
+    return [];
+  }
 }
