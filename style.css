@@ -688,3 +688,44 @@
   -webkit-user-drag: none;
   pointer-events: none;
 }
+
+/* 双人游戏全屏视图 —— 独立挂在 document.body 下，铺满整个屏幕 */
+#wh-duo-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  background: #fdf6ee;
+  display: none;
+  flex-direction: column;
+}
+
+.wh-duo-fs-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #8a6d5c;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.wh-duo-fs-header button {
+  border: none;
+  background: none;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+#wh-duo-fs-title {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.wh-duo-fs-iframe {
+  flex: 1;
+  width: 100%;
+  border: 0;
+}

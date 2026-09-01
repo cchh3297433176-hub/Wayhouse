@@ -9,7 +9,7 @@ import { normalizeBaseUrl, cleanText, fetchModelList, filterModels, createPreset
 import { getScopeKey, getScopeConfig, addNpc, updateNpc, removeNpc, needsMemoryPrompt, setMemoryChoice, decide, buildNpcExtractionPrompt, parseNpcExtractionResult } from './src/duoGame.js';
 
 const MODULE_NAME = 'wayhouse';
-const EXT_VERSION = '0.7.2'; // 面板标题旁边会显示，方便确认更新是否生效
+const EXT_VERSION = '0.8.0'; // 面板标题旁边会显示，方便确认更新是否生效
 const MENU_ID = 'wayhouse-menu-item';
 const MENU_SELECTORS = [
   '#extensionsMenu',
@@ -175,11 +175,63 @@ function createModalsRoot() {
         </div>
       </div>
     </div>
+
+    <div id="wh-duo-fullscreen" style="display:none">
+      <div class="wh-duo-fs-header">
+        <button id="wh-duo-fs-back">← 返回双人游戏</button>
+        <span id="wh-duo-fs-title"></span>
+      </div>
+      <div class="wh-gen-notify" id="wh-duo-gen-notify" style="display:none">
+        <span>楼层生成完成啦，要去看看吗？</span>
+        <div class="wh-gen-notify-btns">
+          <button id="wh-duo-gen-notify-view">去看酒馆</button>
+          <button id="wh-duo-gen-notify-dismiss">继续玩</button>
+        </div>
+      </div>
+      <iframe
+        class="wh-duo-fs-iframe"
+        id="wh-duo-fs-iframe"
+        frameborder="0"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-orientation-lock allow-popups allow-modals allow-downloads"
+        allow="accelerometer; gyroscope; gamepad; fullscreen; autoplay"
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
   `;
   document.body.appendChild(root);
   bindGameModalUI(document);
   bindNpcModalUI(document);
   bindBallCropUI(document);
+  bindDuoFullscreenUI(document);
+}
+
+// ===== 双人游戏全屏视图 =====
+// 跟弹窗一样直接挂在 document.body 下，不塞进面板的 flex 布局里，
+// 从根上避开面板嵌套 flex/min-height 导致高度被压缩、滑不动的问题。
+function openDuoFullscreen(url, name) {
+  const el = document.querySelector('#wh-duo-fullscreen');
+  const iframe = document.querySelector('#wh-duo-fs-iframe');
+  const title = document.querySelector('#wh-duo-fs-title');
+  title.textContent = name || '双人游戏';
+  el.style.display = 'flex';
+  loadGameIntoIframe(iframe, url, name || '双人游戏');
+}
+
+function closeDuoFullscreen() {
+  const el = document.querySelector('#wh-duo-fullscreen');
+  const iframe = document.querySelector('#wh-duo-fs-iframe');
+  el.style.display = 'none';
+  iframe.srcdoc = '';
+}
+
+function bindDuoFullscreenUI() {
+  document.querySelector('#wh-duo-fs-back').addEventListener('click', closeDuoFullscreen);
+  document.querySelector('#wh-duo-gen-notify-view').addEventListener('click', () => {
+    hideGenNotify();
+    closeDuoFullscreen();
+    hidePanel();
+  });
+  document.querySelector('#wh-duo-gen-notify-dismiss').addEventListener('click', hideGenNotify);
 }
 
 function createPanel() {
@@ -327,6 +379,7 @@ function createPanel() {
           <div id="wh-duo-game-badge" class="wh-duo-game-badge" style="display:none">
             <span id="wh-duo-game-badge-icon"></span>
             <span id="wh-duo-game-badge-name"></span>
+            <button id="wh-duo-game-enter" class="wh-duo-game-edit-btn">进入</button>
             <button id="wh-duo-game-edit" class="wh-duo-game-edit-btn">编辑</button>
           </div>
 
@@ -343,27 +396,10 @@ function createPanel() {
               <span>游戏链接</span>
               <input type="text" id="wh-duo-game-url" class="wh-modal-url-input" placeholder="https://.../game.html">
             </label>
-            <button class="wayhouse-upload-btn" id="wh-duo-load-game" style="width:100%;">加载游戏</button>
+            <button class="wayhouse-upload-btn" id="wh-duo-load-game" style="width:100%;">保存并进入</button>
           </div>
 
-          <div class="wh-game-frame-wrap" id="wh-duo-game-frame-wrap" style="display:none">
-            <div class="wh-gen-notify" id="wh-duo-gen-notify" style="display:none">
-              <span>楼层生成完成啦，要去看看吗？</span>
-              <div class="wh-gen-notify-btns">
-                <button id="wh-duo-gen-notify-view">去看酒馆</button>
-                <button id="wh-duo-gen-notify-dismiss">继续玩</button>
-              </div>
-            </div>
-            <iframe
-              class="wh-game-iframe"
-              id="wh-duo-game-iframe"
-              frameborder="0"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-orientation-lock allow-popups allow-modals allow-downloads"
-              allow="accelerometer; gyroscope; gamepad; fullscreen; autoplay"
-              loading="lazy"
-              referrerpolicy="no-referrer-when-downgrade"></iframe>
-          </div>
-          <p class="wh-games-tip">当前先能手动加载/查看游戏，会记住这个存档配的名称/图标/链接。AI 自动走棋、reroll 兜底这些还没接，先能显示出来验证链接和布局没问题。</p>
+          <p class="wh-games-tip">游戏会全屏打开，不再挤在小框里。会记住这个存档配的名称/图标/链接。AI 自动走棋、reroll 兜底这些还没接，先能显示出来验证链接和布局没问题。</p>
         </div>
 
         <div id="wh-duo-settings-body" style="display:none">
@@ -769,8 +805,6 @@ function bindDuoGameUI(root) {
   const gameUrlInput = root.querySelector('#wh-duo-game-url');
   const gameNameInput = root.querySelector('#wh-duo-game-name');
   const gameIconInput = root.querySelector('#wh-duo-game-icon');
-  const gameFrameWrap = root.querySelector('#wh-duo-game-frame-wrap');
-  const gameIframe = root.querySelector('#wh-duo-game-iframe');
   const gameForm = root.querySelector('#wh-duo-game-form');
   const gameBadge = root.querySelector('#wh-duo-game-badge');
   const gameBadgeIcon = root.querySelector('#wh-duo-game-badge-icon');
@@ -780,13 +814,11 @@ function bindDuoGameUI(root) {
   gameNameInput.value = scopeConfig.gameName || '';
   gameIconInput.value = scopeConfig.gameIcon || '';
 
-  function showLoadedGame() {
+  function showBadge() {
     gameBadgeIcon.textContent = scopeConfig.gameIcon || '🎲';
     gameBadgeName.textContent = scopeConfig.gameName || '未命名游戏';
     gameBadge.style.display = 'flex';
     gameForm.style.display = 'none';
-    gameFrameWrap.style.display = 'flex';
-    loadGameIntoIframe(gameIframe, scopeConfig.gameUrl, scopeConfig.gameName || '双人游戏');
   }
 
   root.querySelector('#wh-duo-load-game').addEventListener('click', () => {
@@ -796,25 +828,22 @@ function bindDuoGameUI(root) {
     scopeConfig.gameName = gameNameInput.value.trim();
     scopeConfig.gameIcon = gameIconInput.value.trim() || '🎲';
     saveSettings();
-    showLoadedGame();
+    showBadge();
+    openDuoFullscreen(scopeConfig.gameUrl, scopeConfig.gameName);
+  });
+
+  root.querySelector('#wh-duo-game-enter').addEventListener('click', () => {
+    openDuoFullscreen(scopeConfig.gameUrl, scopeConfig.gameName);
   });
 
   root.querySelector('#wh-duo-game-edit').addEventListener('click', () => {
     gameBadge.style.display = 'none';
     gameForm.style.display = 'block';
-    gameFrameWrap.style.display = 'none';
-    gameIframe.srcdoc = '';
   });
 
-  root.querySelector('#wh-duo-gen-notify-view').addEventListener('click', () => {
-    hideGenNotify();
-    hidePanel();
-  });
-  root.querySelector('#wh-duo-gen-notify-dismiss').addEventListener('click', hideGenNotify);
-
-  // 这个存档之前存过游戏，直接自动加载出来，不用每次都重新填
+  // 这个存档之前存过游戏，先显示徽章，不自动全屏跳转，点"进入"才打开
   if (scopeConfig.gameUrl) {
-    showLoadedGame();
+    showBadge();
   }
 
   // AI 读取角色卡/世界书/user 人设，生成 NPC 列表
@@ -1029,27 +1058,27 @@ function bindGameModalUI(root) {
   });
 }
 
-// 两处游戏区（休闲小游戏 / 双人游戏）都要能弹这个提醒条，统一处理
+// 两处游戏区（休闲小游戏 / 双人游戏全屏层）都要能弹这个提醒条，统一处理。
+// 双人游戏那个全屏层现在挂在 document.body 下（不在 panel 里），所以这里统一用
+// document 查找，不用 panel.querySelector，两边都能找到。
 const GAME_NOTIFY_TARGETS = [
   { frameWrapId: '#wh-game-frame-wrap', notifyId: '#wh-gen-notify' },
-  { frameWrapId: '#wh-duo-game-frame-wrap', notifyId: '#wh-duo-gen-notify' },
+  { frameWrapId: '#wh-duo-fullscreen', notifyId: '#wh-duo-gen-notify' },
 ];
 
 function showGenNotify() {
-  if (!panel) return;
   for (const t of GAME_NOTIFY_TARGETS) {
-    const frameWrap = panel.querySelector(t.frameWrapId);
+    const frameWrap = document.querySelector(t.frameWrapId);
     if (frameWrap && frameWrap.style.display !== 'none') {
-      const bar = panel.querySelector(t.notifyId);
+      const bar = document.querySelector(t.notifyId);
       if (bar) bar.style.display = 'flex';
     }
   }
 }
 
 function hideGenNotify() {
-  if (!panel) return;
   for (const t of GAME_NOTIFY_TARGETS) {
-    const bar = panel.querySelector(t.notifyId);
+    const bar = document.querySelector(t.notifyId);
     if (bar) bar.style.display = 'none';
   }
 }
@@ -1070,9 +1099,9 @@ function bindGenerationNotify() {
 
 function handleMessageReceived(messageId) {
   try {
-    if (!isVisible || !panel) return; // 面板没开着不用提醒
+    if (!isVisible) return; // 面板没开着不用提醒（双人游戏全屏层只能从面板里打开，逻辑上跟面板状态是绑定的）
     const anyGameOpen = GAME_NOTIFY_TARGETS.some(t => {
-      const fw = panel.querySelector(t.frameWrapId);
+      const fw = document.querySelector(t.frameWrapId);
       return fw && fw.style.display !== 'none';
     });
     if (!anyGameOpen) return; // 只在正玩游戏时提醒（不管是休闲小游戏还是双人游戏）
