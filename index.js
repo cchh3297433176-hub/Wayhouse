@@ -9,7 +9,7 @@ import { normalizeBaseUrl, cleanText, fetchModelList, filterModels, createPreset
 import { getScopeKey, getScopeConfig, addNpc, updateNpc, removeNpc, needsMemoryPrompt, setMemoryChoice, decide, buildNpcExtractionPrompt, parseNpcExtractionResult } from './src/duoGame.js';
 
 const MODULE_NAME = 'wayhouse';
-const EXT_VERSION = '0.8.2'; // 面板标题旁边会显示，方便确认更新是否生效
+const EXT_VERSION = '0.8.3'; // 面板标题旁边会显示，方便确认更新是否生效
 const MENU_ID = 'wayhouse-menu-item';
 const MENU_SELECTORS = [
   '#extensionsMenu',
@@ -208,20 +208,26 @@ function createModalsRoot() {
 // ===== 双人游戏全屏视图 =====
 // 跟弹窗一样直接挂在 document.body 下，不塞进面板的 flex 布局里，
 // 从根上避开面板嵌套 flex/min-height 导致高度被压缩、滑不动的问题。
-function openDuoFullscreen(url, name) {
+// 记住当前全屏层里已经加载的是哪个链接，"进入"的时候如果没变就不重新加载，
+// 保留游戏进度（跟"小游戏"Tab 关闭面板不清空 iframe 是同一个思路）。
+let duoFullscreenLoadedUrl = null;
+
+function openDuoFullscreen(url, name, forceReload = false) {
   const el = document.querySelector('#wh-duo-fullscreen');
   const iframe = document.querySelector('#wh-duo-fs-iframe');
   const title = document.querySelector('#wh-duo-fs-title');
   title.textContent = name || '双人游戏';
   el.style.display = 'flex';
-  loadGameIntoIframe(iframe, url, name || '双人游戏');
+  if (forceReload || duoFullscreenLoadedUrl !== url) {
+    loadGameIntoIframe(iframe, url, name || '双人游戏');
+    duoFullscreenLoadedUrl = url;
+  }
 }
 
 function closeDuoFullscreen() {
+  // 只隐藏，不清空 iframe —— 保留游戏进度，下次点"进入"能接着玩
   const el = document.querySelector('#wh-duo-fullscreen');
-  const iframe = document.querySelector('#wh-duo-fs-iframe');
   el.style.display = 'none';
-  iframe.srcdoc = '';
 }
 
 function bindDuoFullscreenUI() {
@@ -829,11 +835,11 @@ function bindDuoGameUI(root) {
     scopeConfig.gameIcon = gameIconInput.value.trim() || '🎲';
     saveSettings();
     showBadge();
-    openDuoFullscreen(scopeConfig.gameUrl, scopeConfig.gameName);
+    openDuoFullscreen(scopeConfig.gameUrl, scopeConfig.gameName, true); // 改了配置，强制重新加载
   });
 
   root.querySelector('#wh-duo-game-enter').addEventListener('click', () => {
-    openDuoFullscreen(scopeConfig.gameUrl, scopeConfig.gameName);
+    openDuoFullscreen(scopeConfig.gameUrl, scopeConfig.gameName); // 链接没变就复用已有进度
   });
 
   root.querySelector('#wh-duo-game-edit').addEventListener('click', () => {
