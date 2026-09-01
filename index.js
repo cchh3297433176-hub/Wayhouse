@@ -9,7 +9,7 @@ import { normalizeBaseUrl, cleanText, fetchModelList, filterModels, createPreset
 import { getScopeKey, getScopeConfig, addNpc, updateNpc, removeNpc, needsMemoryPrompt, setMemoryChoice, decide, buildNpcExtractionPrompt, parseNpcExtractionResult } from './src/duoGame.js';
 
 const MODULE_NAME = 'wayhouse';
-const EXT_VERSION = '0.8.0'; // 面板标题旁边会显示，方便确认更新是否生效
+const EXT_VERSION = '0.8.1'; // 面板标题旁边会显示，方便确认更新是否生效
 const MENU_ID = 'wayhouse-menu-item';
 const MENU_SELECTORS = [
   '#extensionsMenu',

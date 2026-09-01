@@ -338,7 +338,10 @@
    单独给 overlay 写超大 z-index 仍可能被整个根节点的层级压住。 */
 #wh-modals-root {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   width: 100vw;
   height: 100dvh;
   z-index: 2147483647 !important;
@@ -349,7 +352,10 @@
 /* 添加/编辑游戏弹窗 / 模型选择弹窗 */
 .wh-modal-overlay {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: rgba(0, 0, 0, 0.45);
   z-index: 1;
   pointer-events: auto;
@@ -692,7 +698,12 @@
 /* 双人游戏全屏视图 —— 独立挂在 document.body 下，铺满整个屏幕 */
 #wh-duo-fullscreen {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100vw;
+  height: 100dvh;
   z-index: 1000000;
   background: #fdf6ee;
   display: none;
