@@ -708,6 +708,7 @@
   background: #fdf6ee;
   display: none;
   flex-direction: column;
+  pointer-events: auto;
 }
 
 .wh-duo-fs-header {
